@@ -1,0 +1,2 @@
+datasets~=3.4.0
+Requests~=2.32.3
