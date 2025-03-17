@@ -1,11 +1,9 @@
 from multiprocessing import Pool, cpu_count
 from collections import defaultdict
-import re
 
 from datasets import load_dataset
 
-WORD_PATTERN = re.compile(r'\b[А-Яа-яЁёҢңӨөҮү]+(?:[-–—][А-Яа-яЁёҢңӨөҮү]+)*\b')
-INNER_CLEAN_PATTERN = re.compile(r'[-–—]')
+from src.constants import TRANSLATION_TABLE, WORD_PATTERN, INNER_CLEAN_PATTERN, remove_suffixes
 
 
 def process_chunk(texts: list[str]) -> dict[str, int]:
@@ -14,6 +12,11 @@ def process_chunk(texts: list[str]) -> dict[str, int]:
     for text in texts:
         for match in WORD_PATTERN.finditer(text):
             word = INNER_CLEAN_PATTERN.sub('', match.group().lower())
+            word = remove_suffixes(
+                INNER_CLEAN_PATTERN.sub('', match.group().lower()).translate(
+                    TRANSLATION_TABLE
+                )
+            )
             word_freq[word] += 1
 
     return word_freq
@@ -24,6 +27,11 @@ def merge_dicts(dicts: list[dict[str, int]]) -> dict[str, int]:
     for d in dicts:
         for word, count in d.items():
             final_freq[word] += count
+
+    for word in list(final_freq.keys()):
+        if len(word) < 2:
+            del final_freq[word]
+
     return final_freq
 
 
@@ -43,13 +51,11 @@ def main():
     for word, forms in dictionary:
         word_to_base[word] = word
         for form in forms:
-            if form in word_to_base:
-                print(form)
+            # if form in word_to_base:
+            #     print(form)
             word_to_base[form] = word
 
     print(f'Total word forms: {len(word_to_base)}')
-
-    exit()
 
     print('Loading dataset...')
     dataset = load_dataset(
