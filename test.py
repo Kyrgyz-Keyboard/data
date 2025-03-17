@@ -3,7 +3,8 @@ from collections import defaultdict
 
 from datasets import load_dataset
 
-from src.constants import TRANSLATION_TABLE, WORD_PATTERN, INNER_CLEAN_PATTERN, remove_suffixes
+from src.constants import TRANSLATION_TABLE, WORD_PATTERN, INNER_CLEAN_PATTERN
+from src.suffixes import remove_suffixes
 
 
 def process_chunk(texts: list[str], proc_id: int) -> dict[str, int]:
@@ -36,27 +37,6 @@ def merge_dicts(dicts: list[dict[str, int]]) -> dict[str, int]:
 
 
 def main():
-    print('Loading dictionary...')
-    dictionary = []
-    with open('results/all_words_from_dictionary_by_base.txt', 'r', encoding='utf-8') as file:
-        for line in filter(None, map(str.strip, file)):
-            if not line.startswith('├╴'):
-                dictionary.append((line, []))
-            else:
-                dictionary[-1][1].append(line.removeprefix('├╴'))
-
-    print(f'Dictionary size: {len(dictionary)}')
-
-    word_to_base = {}
-    for word, forms in dictionary:
-        word_to_base[word] = word
-        for form in forms:
-            # if form in word_to_base:
-            #     print(form)
-            word_to_base[form] = word
-
-    print(f'Total word forms: {len(word_to_base)}')
-
     print('Loading dataset...')
     dataset = load_dataset(
         "HuggingFaceFW/fineweb-2",
@@ -69,18 +49,9 @@ def main():
 
     print(f'Total amount of texts: {size}')
 
-    # with open('results/all_texts.txt', 'w', encoding='utf-8') as file:
-    #     for i, text in enumerate(dataset['text']):
-    #         if i % 100_000 == 0:
-    #             print(f'{i}/{len(dataset)}')
-    #         file.write(text + '\n---\n')
-
     print('Loading data to memory...')
 
-    # texts = dataset[:100_000]['text']
-
     num_workers = cpu_count()
-    # num_workers = 1
     chunk_size = size // num_workers
     chunks = [
         (

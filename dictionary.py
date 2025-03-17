@@ -89,6 +89,9 @@ def main():
             )):
                 continue
 
+            if not all(letter in ALLOWED_LETTERS for letter in word_form['form']):
+                continue
+
             if word_form['form'] in pre_words_by_base:
                 continue
 
