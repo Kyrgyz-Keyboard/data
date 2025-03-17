@@ -19,14 +19,18 @@ REPLACEMENTS = {
     'ң': 'н',
     'ө': 'о',
     'ү': 'у',
+
+    '-': '',
+    '–': '',
+    '—': '',
 }
-REPLACEMENTS.update({v.upper(): k.upper() for k, v in REPLACEMENTS.items()})
+# REPLACEMENTS.update({k.upper(): v.upper() for k, v in REPLACEMENTS.items()})
 TRANSLATION_TABLE = str.maketrans(REPLACEMENTS)
 
 # WORD_PATTERN = re.compile(r'\b[А-Яа-я]+(?:[-–—][А-Яа-я]+)*\b')
-WORD_PATTERN = re.compile(r'\b[А-Яа-яcopaeyёңөү]+(?:[-–—][А-Яа-яcopaeyёңөү]+)*\b')
+WORD_PATTERN = re.compile(r'\b[а-я]+\b')
 
-INNER_CLEAN_PATTERN = re.compile(r'[-–—]')
+# INNER_CLEAN_PATTERN = re.compile(r'[-–—]')
 
 # ===================================================== DICTIONARY =====================================================
 
