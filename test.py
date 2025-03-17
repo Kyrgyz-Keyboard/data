@@ -8,8 +8,7 @@ from src.constants import TRANSLATION_TABLE, WORD_PATTERN, INNER_CLEAN_PATTERN, 
 
 def process_chunk(texts: list[str], proc_id: int) -> dict[str, int]:
     word_freq = defaultdict(int)
-
-    log_step = max(1, len(texts) // 10)  # Логируем примерно каждые 10%
+    log_step = max(1, len(texts) // 10)  # Logging every 10%
 
     for i, text in enumerate(texts):
         if i % log_step == 0:
@@ -86,7 +85,7 @@ def main():
     chunks = [
         (
             dataset[proc_id * chunk_size:(proc_id + 1) * chunk_size]['text'],
-            proc_id
+            proc_id + 1
         )
         for proc_id in range(num_workers)
     ]
