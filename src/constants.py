@@ -2,7 +2,7 @@ import re
 import os
 
 
-FILE_LOCATION = os.path.dirname(os.path.abspath(__file__))
+file_location = os.path.dirname(os.path.abspath(__file__))
 
 
 # ======================================================== REGEX ========================================================
@@ -30,23 +30,33 @@ INNER_CLEAN_PATTERN = re.compile(r'[-–—]')
 
 # ===================================================== DICTIONARY =====================================================
 
-print('Loading dictionary...')
-DICTIONARY = []
-with open(f'{FILE_LOCATION}/../results/all_words_from_dictionary_by_base.txt', 'r', encoding='utf-8') as file:
-    for line in filter(None, map(str.strip, file)):
-        if not line.startswith('├╴'):
-            DICTIONARY.append((line, []))
-        else:
-            DICTIONARY[-1][1].append(line.removeprefix('├╴'))
 
-print(f'[Dictionary] Base words: {len(DICTIONARY)}')
+def get_dictionary() -> tuple[dict[str, list[str]], dict[str, str]]:
+    print('Loading dictionary...')
+    pre_dictionary: list[tuple[str, list[str]]] = []
+    with open(f'{file_location}/../results/all_words_from_dictionary_by_base.txt', 'r', encoding='utf-8') as file:
+        for line in filter(None, map(str.strip, file)):
+            if not line.startswith('├╴'):
+                pre_dictionary.append((line, []))
+            else:
+                pre_dictionary[-1][1].append(line.removeprefix('├╴'))
 
-WORD_TO_BASE = {}
-for word, forms in DICTIONARY:
-    WORD_TO_BASE[word] = word
-    for form in forms:
-        # if form in WORD_TO_BASE:
-        #     print(form)
-        WORD_TO_BASE[form] = word
+    print(f'[Dictionary] Base words: {len(pre_dictionary)}')
 
-print(f'[Dictionary] Word forms: {len(WORD_TO_BASE)}')
+    word_to_base: dict[str, str] = {}
+    for word, forms in pre_dictionary:
+        word_to_base[word] = word
+        for form in forms:
+            # if form in word_to_base:
+            #     print(form)
+            word_to_base[form] = word
+
+    print(f'[dictionary] Word forms: {len(word_to_base)}')
+
+    dictionary: dict[str, list[str]] = dict(pre_dictionary)
+
+    return dictionary, word_to_base
+
+
+if __name__ == '__main__':
+    get_dictionary()

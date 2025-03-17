@@ -3,7 +3,7 @@ import sys
 if __name__ == '__main__':
     sys.path.append('../')
 
-from src.constants import DICTIONARY, TRANSLATION_TABLE
+from src.constants import get_dictionary, TRANSLATION_TABLE
 
 
 class SuffixTrie:
@@ -27,72 +27,81 @@ class SuffixTrie:
         return word
 
 
-handmade_suffixes = {
-    'чы', 'чи', 'чу', 'чү',
-    'ба', 'бе', 'бо', 'бө',
-    'мын', 'мин', 'мун', 'мүн',
-    'сың', 'сиң', 'суң', 'сүң',
-    'сыз', 'сиз', 'суз', 'сүз',
-    'быз', 'биз', 'буз', 'бүз',
-    'пыз', 'пиз', 'пуз', 'пүз',
-    'сыңар', 'сиңер', 'суңар', 'сүңөр',
-    'сыздар', 'сиздер', 'суздар', 'сүздөр',
-    'нын', 'нин', 'нун', 'нүн',
-    'дын', 'дин', 'дун', 'дүн',
-    'тын', 'тин', 'тун', 'түн',
-    'га', 'ге', 'го', 'гө',
-    'ка', 'ке', 'ко', 'кө',
-    'дар', 'дер', 'дор', 'дөр',
-    'тар', 'тер', 'тор', 'төр',
-    'лар', 'лер', 'лор', 'лөр',
+def get_suffix_trie() -> SuffixTrie:
+    dictionary, _ = get_dictionary()
 
-    'па', 'пе', 'по', 'пө',
-    'би', 'бу', 'бү', 'бы',
-    'пи', 'пу', 'пү', 'пы',
+    handmade_suffixes = {
+        'чы', 'чи', 'чу', 'чү',
+        'ба', 'бе', 'бо', 'бө',
+        'мын', 'мин', 'мун', 'мүн',
+        'сың', 'сиң', 'суң', 'сүң',
+        'сыз', 'сиз', 'суз', 'сүз',
+        'быз', 'биз', 'буз', 'бүз',
+        'пыз', 'пиз', 'пуз', 'пүз',
+        'сыңар', 'сиңер', 'суңар', 'сүңөр',
+        'сыздар', 'сиздер', 'суздар', 'сүздөр',
+        'нын', 'нин', 'нун', 'нүн',
+        'дын', 'дин', 'дун', 'дүн',
+        'тын', 'тин', 'тун', 'түн',
+        'га', 'ге', 'го', 'гө',
+        'ка', 'ке', 'ко', 'кө',
+        'дар', 'дер', 'дор', 'дөр',
+        'тар', 'тер', 'тор', 'төр',
+        'лар', 'лер', 'лор', 'лөр',
 
-    'тон', 'төн', 'тан', 'тен',
-    'дон', 'дөн', 'дан', 'ден',
+        'па', 'пе', 'по', 'пө',
+        'би', 'бу', 'бү', 'бы',
+        'пи', 'пу', 'пү', 'пы',
 
-    'ги', 'гу', 'гы', 'гү',
-    'ки', 'ку', 'кы', 'кү',
-    'ка', 'ке', 'ко', 'кө',
+        'тон', 'төн', 'тан', 'тен',
+        'дон', 'дөн', 'дан', 'ден',
 
-    'гун', 'гүн', 'гын', 'гин',
-    'кун', 'күн', 'кын', 'кин',
+        'ги', 'гу', 'гы', 'гү',
+        'ки', 'ку', 'кы', 'кү',
+        'ка', 'ке', 'ко', 'кө',
 
-    'даш', 'деш', 'дош', 'дөш',
-    'таш', 'теш', 'тош', 'төш',
+        'гун', 'гүн', 'гын', 'гин',
+        'кун', 'күн', 'кын', 'кин',
 
-    'йм', 'өм', 'ам', 'ем', 'ом',
+        'даш', 'деш', 'дош', 'дөш',
+        'таш', 'теш', 'тош', 'төш',
 
-    'да', 'де', 'до', 'дө',
-    'та', 'те', 'то', 'тө',
-    'ына',
+        'йм', 'өм', 'ам', 'ем', 'ом',
 
-    'лик', 'лак', 'лөк', 'лок', 'лук', 'лүк',
+        'да', 'де', 'до', 'дө',
+        'та', 'те', 'то', 'тө',
+        'ына',
 
-    'ум', 'үм', 'өм'
-}
-handmade_suffixes = {suffix.translate(TRANSLATION_TABLE) for suffix in handmade_suffixes}
+        'лик', 'лак', 'лөк', 'лок', 'лук', 'лүк',
 
-print(f'[Suffixes] Hand-made suffixes: {len(handmade_suffixes)}')
+        'ум', 'үм', 'өм'
+    }
+    handmade_suffixes = {suffix.translate(TRANSLATION_TABLE) for suffix in handmade_suffixes}
 
-dictionary_suffixes = set()
-for word, forms in DICTIONARY:
-    for form in forms:
-        if not form.startswith(word):
-            continue
-        suffix = form.removeprefix(word)
-        if suffix:
-            dictionary_suffixes.add(suffix)
+    print(f'[Suffixes] Hand-made suffixes: {len(handmade_suffixes)}')
 
-print(f'[Suffixes] Dictionary suffixes: {len(dictionary_suffixes)}')
+    dictionary_suffixes = set()
+    for word, forms in dictionary.items():
+        for form in forms:
+            if not form.startswith(word):
+                continue
+            suffix = form.removeprefix(word)
+            if suffix:
+                dictionary_suffixes.add(suffix)
 
-SUFFIXES = handmade_suffixes.union(dictionary_suffixes)
-suffix_trie = SuffixTrie(SUFFIXES)
+    print(f'[Suffixes] Dictionary suffixes: {len(dictionary_suffixes)}')
 
-print(f'Total suffixes: {len(SUFFIXES)}')
+    SUFFIXES = handmade_suffixes.union(dictionary_suffixes)
+    suffix_trie = SuffixTrie(SUFFIXES)
+
+    print(f'[Suffixes] Total suffixes: {len(SUFFIXES)}')
+
+    return suffix_trie
 
 
-def remove_suffixes(word: str) -> str:
+def remove_suffixes(suffix_trie: SuffixTrie, word: str) -> str:
     return suffix_trie.remove_suffix(word)
+
+
+if __name__ == '__main__':
+    suffix_trie = get_suffix_trie()
