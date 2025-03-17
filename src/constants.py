@@ -29,20 +29,20 @@ class SuffixTrie:
         self.trie = {}
         for suffix in suffixes:
             node = self.trie
-            for char in reversed(suffix):  # Идём с конца
+            for char in reversed(suffix):
                 node = node.setdefault(char, {})
-            node['$'] = suffix  # Маркер конца суффикса
+            node['$'] = suffix
 
     def remove_suffix(self, word: str) -> str:
         node = self.trie
-        for i in range(len(word) - 1, -1, -1):  # Проходим слово с конца
+        for i in range(len(word) - 1, -1, -1):
             char = word[i]
             if char not in node:
-                break  # Суффикс не найден — выходим
+                break
             node = node[char]
             if '$' in node:
-                return word[:i]  # Обрезаем найденный суффикс
-        return word  # Если ничего не нашли — возвращаем как есть
+                return word[:i]
+        return word
 
 
 SUFFIXES = {
