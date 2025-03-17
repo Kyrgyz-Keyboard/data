@@ -1,3 +1,4 @@
+from functools import cache
 import sys
 
 if __name__ == '__main__':
@@ -99,6 +100,7 @@ def get_suffix_trie() -> SuffixTrie:
     return suffix_trie
 
 
+@cache
 def remove_suffixes(suffix_trie: SuffixTrie, word: str) -> str:
     return suffix_trie.remove_suffix(word)
 
