@@ -1,74 +1,85 @@
 from multiprocessing import Pool, cpu_count
 from collections import defaultdict
+from math import ceil
 
 from datasets import load_dataset
 
 from src.constants import TRANSLATION_TABLE, WORD_PATTERN, INNER_CLEAN_PATTERN
-from src.suffixes import remove_suffixes
+from src.suffixes import SuffixTrie, get_suffix_trie, remove_suffixes
 
 
-def process_chunk(texts: list[str], proc_id: int) -> dict[str, int]:
+BATCH_SIZE = 250_000
+
+
+def process_chunk(worker_id: int, texts: list[str], suffix_trie: SuffixTrie) -> dict[str, int]:
+    print(f'Worker {worker_id} started processing {len(texts)} texts...')
     word_freq = defaultdict(int)
-    log_step = max(1, len(texts) // 10)  # Logging every 10%
 
-    for i, text in enumerate(texts):
-        if i % log_step == 0:
-            print(f'Process {proc_id}: {i}/{len(texts)}')
-
+    for text in texts:
         cleaned_text = INNER_CLEAN_PATTERN.sub('', text.lower().translate(TRANSLATION_TABLE))
 
         for match in WORD_PATTERN.finditer(cleaned_text):
-            word_freq[remove_suffixes(match.group())] += 1
+            word_freq[remove_suffixes(suffix_trie, match.group())] += 1
 
     return word_freq
 
 
-def merge_dicts(dicts: list[dict[str, int]]) -> dict[str, int]:
-    final_freq = defaultdict(int)
+def merge_dicts(*dicts: dict[str, int]) -> dict[str, int]:
+    result = defaultdict(int)
     for d in dicts:
         for word, count in d.items():
-            final_freq[word] += count
+            result[word] += count
 
-    for word, freq in list(final_freq.items()):
-        if freq < 100 or len(word) < 2:
-            del final_freq[word]
-
-    return final_freq
+    return result
 
 
 def main():
+    suffix_trie = get_suffix_trie()
+
     print('Loading dataset...')
     dataset = load_dataset(
         "HuggingFaceFW/fineweb-2",
         name="kir_Cyrl",
         split="train",
-        # streaming=True  # Use streaming to handle large dataset
+        # streaming=True
     )
 
-    size = len(dataset)
-
-    print(f'Total amount of texts: {size}')
-
-    print('Loading data to memory...')
+    print(f'Texts in dataset: {len(dataset)}')
 
     num_workers = cpu_count()
-    chunk_size = size // num_workers
-    chunks = [
-        (
-            dataset[proc_id * chunk_size:(proc_id + 1) * chunk_size]['text'],
-            proc_id + 1
-        )
-        for proc_id in range(num_workers)
-    ]
+    # num_workers = 1
+    print(
+        f'Using {num_workers} workers and batches of size {BATCH_SIZE} '
+        f'({max(1, ceil(BATCH_SIZE / num_workers))} texts per worker)'
+    )
 
-    print(f'Using {num_workers} workers ({cpu_count()} CPUs available) with chunk size: {chunk_size} texts')
+    word_freq = {}
+    batches_to_process = ceil(len(dataset) / BATCH_SIZE)
 
-    print(f'Processing texts...')
-    with Pool(num_workers) as pool:
-        results = pool.starmap(process_chunk, chunks)
+    for batch_num, batch in enumerate(dataset.iter(batch_size=BATCH_SIZE), 1):
+        print(f'Processing batch {batch_num}/{batches_to_process}...')
+        texts = batch['text']
 
-    print('Merging results...')
-    word_freq = merge_dicts(results)
+        chunk_size = max(1, ceil(len(texts) / num_workers))
+        chunks = tuple(tuple(texts[i:i + chunk_size]) for i in range(0, len(texts), chunk_size))
+
+        # print('Running workers...')
+        with Pool(num_workers) as pool:
+            results = pool.starmap(process_chunk, tuple(
+                (worker_id, chunk, suffix_trie) for worker_id, chunk in enumerate(chunks)
+            ))
+
+        # print('Merging partial results...')
+        word_freq = merge_dicts(word_freq, *results)
+
+    print('Cleaning results...')
+    word_freq = {
+        word: freq
+        for word, freq in word_freq.items()
+        if freq >= 100 and len(word) >= 2
+    }
+
+    print('Sorting...')
     words_sorted = sorted(word_freq.items(), key=lambda x: x[1], reverse=True)
 
     print('Saving results...')
