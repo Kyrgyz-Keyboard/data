@@ -1,0 +1,3 @@
+[submodule "dictionary/kyrgyz_tili"]
+	path = dictionary/kyrgyz_tili
+	url = git@github.com:MasterAlish/kyrgyz_tili.git
