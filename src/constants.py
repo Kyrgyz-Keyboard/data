@@ -36,9 +36,9 @@ WORD_PATTERN = re.compile(r'\b[а-я]+\b')
 
 
 def get_dictionary() -> tuple[dict[str, list[str]], dict[str, str]]:
-    print('Loading dictionary...')
+    print('[Dictionary] Loading kaikii dictionary...')
     pre_dictionary: list[tuple[str, list[str]]] = []
-    with open(f'{file_location}/../results/all_words_from_dictionary_by_base.txt', 'r', encoding='utf-8') as file:
+    with open(f'{file_location}/../results/kaikki_dictionary_by_base.txt', 'r', encoding='utf-8') as file:
         for line in filter(None, map(str.strip, file)):
             if not line.startswith('├╴'):
                 pre_dictionary.append((line, []))
