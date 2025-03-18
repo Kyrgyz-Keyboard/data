@@ -6,28 +6,28 @@ from math import ceil
 from datasets import load_dataset
 
 from src.constants import TRANSLATION_TABLE, WORD_PATTERN  # , INNER_CLEAN_PATTERN
-from src.suffixes import SuffixTrie, get_suffix_trie, remove_suffixes
+from src.suffixes import SuffixTrie, get_suffix_trie
 
 
 BATCH_SIZE = 100_000
 
 
 def process_chunk(worker_id: int, texts: list[str], suffix_trie: SuffixTrie) -> dict[str, int]:
-    word_freq = defaultdict(int)
+    word_freq: dict[str, int] = defaultdict(int)
 
     for text in texts:
         # cleaned_text = INNER_CLEAN_PATTERN.sub('', text.lower().translate(TRANSLATION_TABLE))
         # cleaned_text = text.lower().translate(TRANSLATION_TABLE)
 
         for match in WORD_PATTERN.finditer(text.lower().translate(TRANSLATION_TABLE)):
-            word_freq[remove_suffixes(suffix_trie, match.group())] += 1
+            word_freq[suffix_trie.remove_suffixes(match.group())] += 1
             # word_freq[match.group()] += 1
 
     return word_freq
 
 
 def merge_dicts(*dicts: dict[str, int]) -> dict[str, int]:
-    result = defaultdict(int)
+    result: dict[str, int] = defaultdict(int)
     for d in dicts:
         for word, count in d.items():
             result[word] += count
@@ -40,9 +40,9 @@ def main():
 
     print('Loading dataset...')
     dataset = load_dataset(
-        "HuggingFaceFW/fineweb-2",
-        name="kir_Cyrl",
-        split="train",
+        'HuggingFaceFW/fineweb-2',
+        name='kir_Cyrl',
+        split='train',
         # streaming=True
     )
 
@@ -56,7 +56,7 @@ def main():
         f'({max(1, ceil(BATCH_SIZE / num_workers))} texts per run)'
     )
 
-    word_freq = {}
+    word_freq: dict[str, int] = defaultdict(int)
 
     for batch_num, batch in enumerate(dataset.iter(batch_size=BATCH_SIZE), 1):
         print(f'Processing batch {batch_num}/{batches_to_process}...')
@@ -97,5 +97,5 @@ def main():
             file.write(f'{word} {freq}\n')
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

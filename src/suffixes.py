@@ -8,24 +8,30 @@ from src.constants import get_dictionary, TRANSLATION_TABLE
 
 
 class SuffixTrie:
+    TrieInner = dict[str, 'TrieInner']
+
     def __init__(self, suffixes: set[str]):
-        self.trie = {}
+        self.trie: SuffixTrie.TrieInner = {}
         for suffix in suffixes:
-            node = self.trie
+            node: SuffixTrie.TrieInner = self.trie
             for char in reversed(suffix):
                 node = node.setdefault(char, {})
-            node['$'] = suffix
+            node['$'] = {}
 
-    def remove_suffix(self, word: str) -> str:
-        node = self.trie
-        for i in range(len(word) - 1, -1, -1):
-            char = word[i]
-            if char not in node:
-                break
-            node = node[char]
-            if '$' in node:
-                return word[:i]
-        return word
+    @cache  # noqa
+    def remove_suffixes(self, word: str) -> str:
+        while True:
+            node = self.trie
+            for i in range(len(word) - 1, -1, -1):
+                char = word[i]
+                if char not in node:
+                    return word
+                node = node[char]
+                if '$' in node:
+                    word = word[:i]
+                    break
+            else:
+                return word
 
 
 def get_suffix_trie() -> SuffixTrie:
@@ -34,18 +40,22 @@ def get_suffix_trie() -> SuffixTrie:
     handmade_suffixes = {
         'чы', 'чи', 'чу', 'чү',
         'ба', 'бе', 'бо', 'бө',
+
         'мын', 'мин', 'мун', 'мүн',
         'сың', 'сиң', 'суң', 'сүң',
         'сыз', 'сиз', 'суз', 'сүз',
         'быз', 'биз', 'буз', 'бүз',
         'пыз', 'пиз', 'пуз', 'пүз',
+
         'сыңар', 'сиңер', 'суңар', 'сүңөр',
         'сыздар', 'сиздер', 'суздар', 'сүздөр',
+
         'нын', 'нин', 'нун', 'нүн',
         'дын', 'дин', 'дун', 'дүн',
         'тын', 'тин', 'тун', 'түн',
+
         'га', 'ге', 'го', 'гө',
-        'ка', 'ке', 'ко', 'кө',
+
         'дар', 'дер', 'дор', 'дөр',
         'тар', 'тер', 'тор', 'төр',
         'лар', 'лер', 'лор', 'лөр',
@@ -75,7 +85,7 @@ def get_suffix_trie() -> SuffixTrie:
 
         'лик', 'лак', 'лөк', 'лок', 'лук', 'лүк',
 
-        'ум', 'үм', 'өм'
+        'ум', 'үм'
     }
     handmade_suffixes = {suffix.translate(TRANSLATION_TABLE) for suffix in handmade_suffixes}
 
@@ -92,17 +102,10 @@ def get_suffix_trie() -> SuffixTrie:
 
     print(f'[Suffixes] Dictionary suffixes: {len(dictionary_suffixes)}')
 
-    SUFFIXES = handmade_suffixes.union(dictionary_suffixes)
-    suffix_trie = SuffixTrie(SUFFIXES)
+    suffixes = handmade_suffixes.union(dictionary_suffixes)
+    print(f'[Suffixes] Total suffixes: {len(suffixes)}')
 
-    print(f'[Suffixes] Total suffixes: {len(SUFFIXES)}')
-
-    return suffix_trie
-
-
-@cache
-def remove_suffixes(suffix_trie: SuffixTrie, word: str) -> str:
-    return suffix_trie.remove_suffix(word)
+    return SuffixTrie(suffixes)
 
 
 if __name__ == '__main__':
