@@ -4,4 +4,7 @@ results/*
 __pycache__/
 .mypy_cache/
 
+# JetBrains IDE
+/.idea/
+
 !.gitkeep

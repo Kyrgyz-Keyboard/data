@@ -20,9 +20,9 @@ REPLACEMENTS = {
     'ө': 'о',
     'ү': 'у',
 
-    '-': '',
-    '–': '',
-    '—': '',
+    '-': None,
+    '–': None,
+    '—': None,
 }
 # REPLACEMENTS.update({k.upper(): v.upper() for k, v in REPLACEMENTS.items()})
 TRANSLATION_TABLE = str.maketrans(REPLACEMENTS)
@@ -38,7 +38,7 @@ WORD_PATTERN = re.compile(r'\b[а-я]+\b')
 def get_dictionary() -> tuple[dict[str, list[str]], dict[str, str]]:
     print('[Dictionary] Loading kaikii dictionary...')
     pre_dictionary: list[tuple[str, list[str]]] = []
-    with open(f'{file_location}/../results/kaikki_dictionary_by_base.txt', 'r', encoding='utf-8') as file:
+    with open(f'{file_location}/../results/kaikki_words_by_base.txt', 'r', encoding='utf-8') as file:
         for line in filter(None, map(str.strip, file)):
             if not line.startswith('├╴'):
                 pre_dictionary.append((line, []))
