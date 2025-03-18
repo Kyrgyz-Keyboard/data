@@ -13,8 +13,7 @@ from src.utils import mkpath
 # https://github.com/tatuylonen/wiktextract
 URL = 'https://kaikki.org/dictionary/Kyrgyz/kaikki.org-dictionary-Kyrgyz.jsonl'
 
-ALLOWED_LETTERS = 'абвгдеёжзийклмнпрстуфхцчшъыьэюяңөү'
-ALLOWED_LETTERS = tuple(ALLOWED_LETTERS + ALLOWED_LETTERS.upper())
+ALLOWED_LETTERS = {letter for letter in 'абвгдеёжзийклмнпрстуфхцчшъыьэюяңөү' for letter in (letter, letter.upper())}
 
 
 def gen():
@@ -72,7 +71,7 @@ def gen():
     #             + '\n'
     #         )
 
-    words_by_base = {}
+    words_by_base: dict[str, set[str]] = {}
     for word in words:
         words_by_base[word['word']] = set()
 
@@ -96,11 +95,8 @@ def gen():
 
             words_by_base[word['word']].add(word_form['form'])
 
-        words_by_base[word['word']] = sorted(words_by_base[word['word']])
-
     for word in list(words_by_base.keys()):
-        forms = words_by_base.get(word, [])
-        for form in forms:
+        for form in words_by_base.get(word, set()):
             if form in words_by_base:
                 del words_by_base[form]
 
@@ -109,7 +105,7 @@ def gen():
 
     with open(mkpath(ROOT, 'results/kaikki_dictionary_by_base.txt'), 'w', encoding='utf-8') as file:
         for word, forms in words_by_base.items():
-            file.write('\n├╴'.join([word] + forms) + '\n\n')
+            file.write('\n├╴'.join([word] + sorted(forms)) + '\n\n')
 
 
 if __name__ == '__main__':

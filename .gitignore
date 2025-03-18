@@ -1,6 +1,7 @@
 results/*
 
-!.gitkeep
-
-# Python cache
+# Python cache (+ mypy)
 __pycache__/
+.mypy_cache/
+
+!.gitkeep
