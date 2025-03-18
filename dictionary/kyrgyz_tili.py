@@ -14,7 +14,7 @@ import kg.db.generate_words as kyrgyz_tili_generate
 def gen():
     print('Generating dictionary from kyrgyz_tili...')
 
-    with open(mkpath(ROOT, 'results/kyrgyz_tili_dictionary_by_base.txt'), 'w', encoding='utf-8') as file:
+    with open(mkpath(ROOT, 'results/kyrgyz_tili_words_by_base.txt'), 'w', encoding='utf-8') as file:
         os.chdir('kyrgyz_tili')
         for word in kyrgyz_tili_generate.Word.select():
             file.write(word.word + ''.join(

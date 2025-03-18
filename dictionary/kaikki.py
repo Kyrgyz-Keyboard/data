@@ -63,7 +63,7 @@ def gen():
         for word in words:
             file.write(json.dumps(word, ensure_ascii=False, indent=4) + '\n')
 
-    # with open(mkpath(ROOT, 'results/kaikki_dictionary.txt'), 'w', encoding='utf-8') as file:
+    # with open(mkpath(ROOT, 'results/kaikki_words.txt'), 'w', encoding='utf-8') as file:
     #     for word in words:
     #         file.write(
     #             word['word']
@@ -103,7 +103,7 @@ def gen():
     print(f'Total word bases: {len(words_by_base)}')
     print(f'Total word forms: {sum(len(forms) for forms in words_by_base.values()) + len(words_by_base)}')
 
-    with open(mkpath(ROOT, 'results/kaikki_dictionary_by_base.txt'), 'w', encoding='utf-8') as file:
+    with open(mkpath(ROOT, 'results/kaikki_words_by_base.txt'), 'w', encoding='utf-8') as file:
         for word, forms in words_by_base.items():
             file.write('\n├╴'.join([word] + sorted(forms)) + '\n\n')
 

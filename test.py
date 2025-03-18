@@ -2,6 +2,7 @@ from multiprocessing import Pool, cpu_count
 from collections import defaultdict
 from time import perf_counter
 from math import ceil
+# import os
 
 from datasets import load_dataset
 
@@ -10,6 +11,7 @@ from src.suffixes import SuffixTrie, get_suffix_trie
 
 
 BATCH_SIZE = 100_000
+# os.environ['HF_HUB_OFFLINE'] = '1'
 
 
 def process_chunk(worker_id: int, texts: list[str], suffix_trie: SuffixTrie) -> dict[str, int]:
@@ -43,6 +45,7 @@ def main():
         'HuggingFaceFW/fineweb-2',
         name='kir_Cyrl',
         split='train',
+        num_proc=4,
         # streaming=True
     )
 
