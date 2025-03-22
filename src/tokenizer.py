@@ -28,7 +28,7 @@ class Tokenizer:
 
     # WORD_PATTERN = re.compile(r'\b[А-Яа-я]+(?:[-–—][А-Яа-я]+)*\b')
     WORD_PATTERN = re.compile(
-        r'\d+-[а-яА-ЯёңөүЁҢҮӨ]+|\d+|[а-яА-ЯёңөүЁҢҮӨa-zA-Z\d\.\,]+\b'
+        r'\d+-[а-яА-ЯёңөүЁҢҮӨ]+|[а-яА-ЯёңөүЁҢҮӨa-zA-Z\d\.]+(?:,\d+)?\b'
     )
 
     # INNER_CLEAN_PATTERN = re.compile(r'[-–—]')
@@ -60,13 +60,13 @@ if __name__ == '__main__':
     print(tokenizer.SENTENCE_SPLIT_PATERN.pattern)
     print(tokenizer.WORD_PATTERN.pattern)
 
-    # for filename in ('1474.txt',):
-    for filename in os.listdir(f'{file_location}/../results/texts'):
+    # for filename in os.listdir(f'{file_location}/../results/texts'):
+    for filename in ('25875.txt',):
         with open(f'{file_location}/../results/texts/{filename}', 'r', encoding='utf-8') as file:
             text = file.read()
             # print(text)
 
             for sentence in tokenizer.process_text(text):
-                # print(sentence)
+                print(sentence)
                 for word in sentence:
                     assert ' ' not in word, filename
