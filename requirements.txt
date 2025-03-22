@@ -1,2 +1,2 @@
-datasets~=3.4.1
-requests~=2.32.3
+datasets==3.4.1
+requests==2.32.3

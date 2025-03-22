@@ -1,8 +1,9 @@
-from multiprocessing import Pool, cpu_count
+from concurrent.futures import ProcessPoolExecutor
 from collections import defaultdict
 from time import perf_counter
+from itertools import repeat
 from math import ceil
-# import os
+import os
 
 from datasets import load_dataset
 
@@ -51,7 +52,7 @@ def main():
 
     print(f'Texts in dataset: {len(dataset)}')
 
-    num_workers = cpu_count()
+    num_workers = os.cpu_count()
     # num_workers = 1
     batches_to_process = ceil(len(dataset) / BATCH_SIZE)
     print(
@@ -73,10 +74,8 @@ def main():
         start_time = perf_counter()
 
         # print('Running workers...')
-        with Pool(num_workers) as pool:
-            results = pool.starmap(process_chunk, tuple(
-                (worker_id, chunk, suffix_trie) for worker_id, chunk in enumerate(chunks)
-            ))
+        with ProcessPoolExecutor(max_workers=num_workers) as executor:
+            results = executor.map(process_chunk, range(len(chunks)), chunks, repeat(suffix_trie, times=len(chunks)))
 
         print(f'Batch processed in {perf_counter() - start_time:.2f} seconds')
         del chunks
