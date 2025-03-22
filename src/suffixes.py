@@ -4,7 +4,8 @@ import sys
 if __name__ == '__main__':
     sys.path.append('../')
 
-from src.constants import get_dictionary, TRANSLATION_TABLE
+from src.get_dictionary import get_dictionary
+from src.tokenizer import Tokenizer
 
 
 class SuffixTrie:
@@ -87,7 +88,7 @@ def get_suffix_trie() -> SuffixTrie:
 
         'ум', 'үм'
     }
-    handmade_suffixes = {suffix.translate(TRANSLATION_TABLE) for suffix in handmade_suffixes}
+    handmade_suffixes = {suffix.translate(Tokenizer.TRANSLATION_TABLE) for suffix in handmade_suffixes}
 
     print(f'[Suffixes] Hand-made suffixes: {len(handmade_suffixes)}')
 
