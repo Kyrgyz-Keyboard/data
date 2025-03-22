@@ -1,38 +1,7 @@
-import re
 import os
 
 
 file_location = os.path.dirname(os.path.abspath(__file__))
-
-
-# ======================================================= REGEX ========================================================
-
-REPLACEMENTS = {
-    'c': 'с',
-    'o': 'о',
-    'p': 'р',
-    'a': 'а',
-    'e': 'е',
-    'y': 'у',
-
-    'ё': 'е',
-    'ң': 'н',
-    'ө': 'о',
-    'ү': 'у',
-
-    '-': None,
-    '–': None,
-    '—': None,
-}
-# REPLACEMENTS.update({k.upper(): v.upper() for k, v in REPLACEMENTS.items()})
-TRANSLATION_TABLE = str.maketrans(REPLACEMENTS)
-
-# WORD_PATTERN = re.compile(r'\b[А-Яа-я]+(?:[-–—][А-Яа-я]+)*\b')
-WORD_PATTERN = re.compile(r'\b[а-я]+\b')
-
-# INNER_CLEAN_PATTERN = re.compile(r'[-–—]')
-
-# ===================================================== DICTIONARY =====================================================
 
 
 def get_dictionary() -> tuple[dict[str, list[str]], dict[str, str]]:
