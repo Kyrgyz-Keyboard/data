@@ -1,8 +1,12 @@
-results/*
+results/**/*.*
 
 # Python cache (+ mypy)
 __pycache__/
 .mypy_cache/
+
+# Python environment
+.venv/
+.env/
 
 # JetBrains IDE
 /.idea/
