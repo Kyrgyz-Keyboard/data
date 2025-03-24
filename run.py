@@ -1,7 +1,6 @@
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from threading import Lock as LockType
 from collections import defaultdict
-from multiprocessing import Manager
+from multiprocessing import Lock
 from time import perf_counter
 from math import ceil
 import os
@@ -18,10 +17,14 @@ BATCH_SIZE = 100_000
 tokenizer = Tokenizer()
 
 
+SENTENCIES_FS_LOCK = Lock()
+SENTENCIES_OF_BASES_FS_LOCK = Lock()
+SENTENCIES_OF_SUFFIXES_FS_LOCK = Lock()
+
+
 def process_chunk(
     batch_num: int,
     worker_num: int,
-    file_sys_lock: LockType,
     texts: tuple[tuple[int, str], ...],
     suffix_trie: SuffixTrie,
 ):
@@ -53,30 +56,40 @@ def process_chunk(
                 sentencies_of_bases[-1].append(base)
                 sentencies_of_suffixes[-1].append(suffix)
 
+    # print(f'Worker {batch_num}_{worker_num} is storing sentencies...')
     with open(f'results/sentencies/{batch_num}_{worker_num}.txt', 'w', encoding='utf-8') as file:
         file.write('\n'.join(map(' '.join, sentencies)))
-    with file_sys_lock, open('results/sentencies.txt', 'a', encoding='utf-8') as file:
+    with SENTENCIES_FS_LOCK, open('results/sentencies.txt', 'a', encoding='utf-8') as file:
         file.write('\n'.join(map(' '.join, sentencies)))
 
+    # print(f'Worker {batch_num}_{worker_num} is storing sentencies of bases...')
     with open(f'results/sentencies_of_bases/{batch_num}_{worker_num}.txt', 'w', encoding='utf-8') as file:
         file.write('\n'.join(map(' '.join, sentencies_of_bases)))
-    with file_sys_lock, open('results/sentencies_of_bases.txt', 'a', encoding='utf-8') as file:
+    with SENTENCIES_OF_BASES_FS_LOCK, open('results/sentencies_of_bases.txt', 'a', encoding='utf-8') as file:
         file.write('\n'.join(map(' '.join, sentencies_of_bases)))
 
+    # print(f'Worker {batch_num}_{worker_num} is storing sentencies of suffixes...')
     with open(f'results/sentencies_of_suffixes/{batch_num}_{worker_num}.txt', 'w', encoding='utf-8') as file:
         file.write('\n'.join(map(' '.join, sentencies_of_suffixes)))
-    with file_sys_lock, open('results/sentencies_of_suffixes.txt', 'a', encoding='utf-8') as file:
+    with SENTENCIES_OF_SUFFIXES_FS_LOCK, open('results/sentencies_of_suffixes.txt', 'a', encoding='utf-8') as file:
         file.write('\n'.join(map(' '.join, sentencies_of_suffixes)))
 
+    # print(f'Worker {batch_num}_{worker_num} finished writing results')
     return word_freq, base_freq, suffix_freq
 
 
 def main():
     suffix_trie = get_suffix_trie()
-    file_sys_lock = Manager().Lock()
 
-    with open('results/sentencies.txt', 'w', encoding='utf-8'):
-        pass
+    for folder in (
+        'results/texts', 'results/sentencies', 'results/sentencies_of_bases', 'results/sentencies_of_suffixes'
+    ):
+        if not os.path.isdir(folder):
+            os.makedirs(folder)
+
+    for filename in ('sentencies', 'sentencies_of_bases', 'sentencies_of_suffixes'):
+        with open(f'results/{filename}.txt', 'w', encoding='utf-8') as file:
+            pass
 
     print('Loading dataset...')
     dataset = load_dataset(
@@ -106,11 +119,11 @@ def main():
         texts = batch['text']
         del batch
 
-        chunk_size = max(1, ceil(len(texts) / num_workers))
+        chunk_size = ceil(len(texts) / num_workers)
         chunks = tuple(
             tuple(
-                (i, text)
-                for text in texts[i:i + chunk_size]
+                ((batch_num - 1) * BATCH_SIZE + i + j, text)
+                for j, text in enumerate(texts[i:i + chunk_size])
             )
             for i in range(0, len(texts), chunk_size)
         )
@@ -125,13 +138,14 @@ def main():
                     process_chunk,
                     batch_num,
                     i,
-                    file_sys_lock,
                     chunk,
                     suffix_trie
                 )
                 for i, chunk in enumerate(chunks)
             )):
+                # print(f'Merging results from one of the workers in {batch_num}...')
                 word_freq_chunk, base_freq_chunk, suffix_freq_chunk = future.result()
+
                 word_freq = {
                     word: word_freq.get(word, 0) + freq
                     for word, freq in word_freq_chunk.items()
