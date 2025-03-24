@@ -1,4 +1,5 @@
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from multiprocessing.synchronize import Lock as LockType
 from collections import defaultdict
 from multiprocessing import Lock
 from time import perf_counter
@@ -16,10 +17,9 @@ BATCH_SIZE = 100_000
 
 tokenizer = Tokenizer()
 
-
-SENTENCIES_FS_LOCK = Lock()
-SENTENCIES_OF_BASES_FS_LOCK = Lock()
-SENTENCIES_OF_SUFFIXES_FS_LOCK = Lock()
+SENTENCIES_FS_LOCK: LockType
+SENTENCIES_OF_BASES_FS_LOCK: LockType
+SENTENCIES_OF_SUFFIXES_FS_LOCK: LockType
 
 
 def process_chunk(
@@ -38,9 +38,9 @@ def process_chunk(
     base_freq: dict[str, int] = defaultdict(int)
     suffix_freq: dict[str, int] = defaultdict(int)
 
-    for text_id, text in texts:
-        with open(f'results/texts/{text_id}.txt', 'w', encoding='utf-8') as file:
-            file.write(text)
+    for _, text in texts:
+        # with open(f'results/texts/{text_id}.txt', 'w', encoding='utf-8') as file:
+        #     file.write(text)
 
         for sentence in tokenizer.process_text(text):
             sentencies.append([])
@@ -78,8 +78,22 @@ def process_chunk(
     return word_freq, base_freq, suffix_freq
 
 
+def init_pool(
+    sentencies_fs_lock: LockType,
+    sentencies_of_bases_fs_lock: LockType,
+    sentencies_of_suffixes_fs_lock: LockType
+):
+    global SENTENCIES_FS_LOCK, SENTENCIES_OF_BASES_FS_LOCK, SENTENCIES_OF_SUFFIXES_FS_LOCK
+    SENTENCIES_FS_LOCK = sentencies_fs_lock
+    SENTENCIES_OF_BASES_FS_LOCK = sentencies_of_bases_fs_lock
+    SENTENCIES_OF_SUFFIXES_FS_LOCK = sentencies_of_suffixes_fs_lock
+
+
 def main():
     suffix_trie = get_suffix_trie()
+    sentencies_fs_lock = Lock()
+    sentencies_of_bases_fs_lock = Lock()
+    sentencies_of_suffixes_fs_lock = Lock()
 
     for folder in (
         'results/texts', 'results/sentencies', 'results/sentencies_of_bases', 'results/sentencies_of_suffixes'
@@ -131,7 +145,11 @@ def main():
 
         start_time = perf_counter()
 
-        with ProcessPoolExecutor(max_workers=num_workers) as executor:
+        with ProcessPoolExecutor(
+            max_workers=num_workers,
+            initializer=init_pool,
+            initargs=(sentencies_fs_lock, sentencies_of_bases_fs_lock, sentencies_of_suffixes_fs_lock)
+        ) as executor:
             # print('Running workers...')
             for future in as_completed((
                 executor.submit(
@@ -139,7 +157,7 @@ def main():
                     batch_num,
                     i,
                     chunk,
-                    suffix_trie
+                    suffix_trie,
                 )
                 for i, chunk in enumerate(chunks)
             )):
@@ -163,7 +181,7 @@ def main():
         print(f'Batch processed in {perf_counter() - start_time:.2f} seconds')
         del chunks
 
-    print('Cleaning results...')
+    # print('Cleaning results...')
     # word_freq = {word: freq for word, freq in word_freq.items() if freq >= 100 and len(word) > 1}
     # word_freq = {word: freq for word, freq in word_freq.items() if len(word) > 1}
 
