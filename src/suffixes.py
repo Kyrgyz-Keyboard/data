@@ -24,16 +24,16 @@ class SuffixTrie:
             node['$'] = {}
 
     @cache  # noqa
-    def remove_suffixes(self, word: str) -> str:
+    def remove_suffix(self, word: str) -> tuple[str, str]:
         node = self.trie
         for i in range(len(word) - 1, -1, -1):
             char = word[i]
             if char not in node:
-                return word
+                return word, ''
             node = node[char]
             if '$' in node:
-                return word[:i]
-        return word
+                return word[:i], word[i:]
+        return word, ''
 
 
 def get_suffix_trie() -> SuffixTrie:

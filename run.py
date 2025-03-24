@@ -1,14 +1,12 @@
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from threading import Lock as LockType
 from multiprocessing import Manager
-# from collections import defaultdict
 from time import perf_counter
 from math import ceil
 import os
 
 from datasets import load_dataset
 
-# from src.constants import TRANSLATION_TABLE, WORD_PATTERN  # , INNER_CLEAN_PATTERN
 from src.suffixes import SuffixTrie, get_suffix_trie
 from src.tokenizer import Tokenizer
 
@@ -23,42 +21,53 @@ def process_chunk(
     batch_num: int,
     worker_num: int,
     file_sys_lock: LockType,
-    texts: list[tuple[int, str]],
+    texts: tuple[tuple[int, str], ...],
     suffix_trie: SuffixTrie,
 ):
     # print(f'Worker {batch_num}_{worker_num} started processing {len(texts)} texts')
-    # sentencies: list[str] = []
-    word_bases: set[str] = set()
 
-    for text_id, text in texts:
+    sentencies: list[list[str]] = []
+    sentencies_of_bases: list[list[str]] = []
+    sentencies_of_suffixes: list[list[str]] = []
+
+    word_freq: dict[str, int] = {}
+    base_freq: dict[str, int] = {}
+    suffix_freq: dict[str, int] = {}
+
+    for _, text in texts:
         # with open(f'results/texts/{text_id}.txt', 'w', encoding='utf-8') as file:
         #     file.write(text)
 
-        # sentencies.extend(map(' '.join, tokenizer.process_text(text)))
-
-        # for match in WORD_PATTERN.finditer(text.lower().translate(TRANSLATION_TABLE)):
-        #     word_freq[suffix_trie.remove_suffixes(match.group())] += 1
-
         for sentence in tokenizer.process_text(text):
+            sentencies.append([])
+            sentencies_of_bases.append([])
+            sentencies_of_suffixes.append([])
             for word in sentence:
-                word_bases.add(suffix_trie.remove_suffixes(word))
+                word_freq[word] += 1
+                base, suffix = suffix_trie.remove_suffix(word)
+                base_freq[base] += 1
+                suffix_freq[suffix] += 1
 
-    # with open(f'results/sentencies/{batch_num}_{worker_num}.txt', 'w', encoding='utf-8') as file:
-    #     file.write('\n'.join(sentencies))
+                sentencies[-1].append(word)
+                sentencies_of_bases[-1].append(base)
+                sentencies_of_suffixes[-1].append(suffix)
 
-    # with file_sys_lock, open('results/sentencies.txt', 'a', encoding='utf-8') as file:
-    #     file.write('\n'.join(sentencies))
+    with open(f'results/sentencies/{batch_num}_{worker_num}.txt', 'w', encoding='utf-8') as file:
+        file.write('\n'.join(map(' '.join, sentencies)))
+    with file_sys_lock, open('results/sentencies.txt', 'a', encoding='utf-8') as file:
+        file.write('\n'.join(map(' '.join, sentencies)))
 
-    # return sentencies
-    return word_bases
+    with open(f'results/sentencies_of_bases/{batch_num}_{worker_num}.txt', 'w', encoding='utf-8') as file:
+        file.write('\n'.join(map(' '.join, sentencies_of_bases)))
+    with file_sys_lock, open('results/sentencies_of_bases.txt', 'a', encoding='utf-8') as file:
+        file.write('\n'.join(map(' '.join, sentencies_of_bases)))
 
+    with open(f'results/sentencies_of_suffixes/{batch_num}_{worker_num}.txt', 'w', encoding='utf-8') as file:
+        file.write('\n'.join(map(' '.join, sentencies_of_suffixes)))
+    with file_sys_lock, open('results/sentencies_of_suffixes.txt', 'a', encoding='utf-8') as file:
+        file.write('\n'.join(map(' '.join, sentencies_of_suffixes)))
 
-# def merge_dicts(*dicts: dict[str, int]) -> dict[str, int]:
-#     result: dict[str, int] = defaultdict(int)
-#     for d in dicts:
-#         for word, count in d.items():
-#             result[word] += count
-#     return result
+    return word_freq, base_freq, suffix_freq
 
 
 def main():
@@ -87,9 +96,9 @@ def main():
         f'({max(1, ceil(BATCH_SIZE / num_workers))} texts per run)'
     )
 
-    # word_freq: dict[str, int] = defaultdict(int)
-    # sentencies: list[str] = []
-    all_word_bases: set[str] = set()
+    word_freq: dict[str, int] = {}
+    base_freq: dict[str, int] = {}
+    suffix_freq: dict[str, int] = {}
 
     for batch_num, batch in enumerate(dataset.iter(batch_size=BATCH_SIZE), 1):
         print(f'Processing batch {batch_num}/{batches_to_process}...')
@@ -121,42 +130,41 @@ def main():
                 )
                 for i, chunk in enumerate(chunks)
             )):
-                # sentencies.extend(future.result())
-                all_word_bases.update(future.result())
+                word_freq_chunk, base_freq_chunk, suffix_freq_chunk = future.result()
+                word_freq = {
+                    word: word_freq.get(word, 0) + freq
+                    for word, freq in word_freq_chunk.items()
+                }
+                base_freq = {
+                    base: base_freq.get(base, 0) + freq
+                    for base, freq in base_freq_chunk.items()
+                }
+                suffix_freq = {
+                    suffix: suffix_freq.get(suffix, 0) + freq
+                    for suffix, freq in suffix_freq_chunk.items()
+                }
+                del word_freq_chunk, base_freq_chunk, suffix_freq_chunk
 
         print(f'Batch processed in {perf_counter() - start_time:.2f} seconds')
         del chunks
 
-        # print('Merging partial results...')
-        # word_freq = merge_dicts(word_freq, *results)
-        # for result in results:
-        #     sentencies.extend(result)
-
     print('Cleaning results...')
-    # word_freq = {
-    #     word: freq
-    #     for word, freq in word_freq.items()
-    #     if freq >= 100 and len(word) >= 2
-    # }
-    all_word_bases = {
-        word
-        for word in all_word_bases
-        if len(word) >= 2
-    }
+    # word_freq = {word: freq for word, freq in word_freq.items() if freq >= 100 and len(word) > 1}
+    word_freq = {word: freq for word, freq in word_freq.items() if len(word) > 1}
 
-    # print('Sorting...')
-    # words_sorted = sorted(word_freq.items(), key=lambda x: x[1], reverse=True)
-    # del word_freq
-    all_word_bases_sorted = sorted(all_word_bases)
-    del all_word_bases
+    print('Sorting...')
+    word_freq_sorted = sorted(word_freq.items(), key=lambda x: x[1], reverse=True)
+    base_freq_sorted = sorted(base_freq.items(), key=lambda x: x[1], reverse=True)
+    suffix_freq_sorted = sorted(suffix_freq.items(), key=lambda x: x[1], reverse=True)
+    del word_freq, base_freq, suffix_freq
 
     print('Saving results...')
-    # with open('results/word_freq.txt', 'w', encoding='utf-8') as file:
-    #     file.write('\n'.join(f'{word} {freq}' for word, freq in words_sorted))
-    # with open('results/sentencies.txt', 'w', encoding='utf-8') as file:
-    #     file.write('\n'.join(sentencies))
-    with open('results/word_bases.txt', 'w', encoding='utf-8') as file:
-        file.write('\n'.join(all_word_bases_sorted))
+    with open('results/word_freq.txt', 'w', encoding='utf-8') as file:
+        file.write('\n'.join(f'{word} {freq}' for word, freq in word_freq_sorted))
+    with open('results/base_freq.txt', 'w', encoding='utf-8') as file:
+        file.write('\n'.join(f'{base} {freq}' for base, freq in base_freq_sorted))
+    with open('results/suffix_freq.txt', 'w', encoding='utf-8') as file:
+        file.write('\n'.join(f'{suffix} {freq}' for suffix, freq in suffix_freq_sorted))
 
 
 if __name__ == '__main__':
