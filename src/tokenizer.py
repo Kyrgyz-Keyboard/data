@@ -7,17 +7,19 @@ file_location = os.path.dirname(os.path.abspath(__file__))
 
 class Tokenizer:
     REPLACEMENTS = {
-        'c': 'с',
-        'o': 'о',
-        'p': 'р',
-        'a': 'а',
-        'e': 'е',
-        'y': 'у',
+        # 'c': 'с',
+        # 'o': 'о',
+        # 'p': 'р',
+        # 'a': 'а',
+        # 'e': 'е',
+        # 'y': 'у',
 
         # 'ё': 'е',
         # 'ң': 'н',
         # 'ө': 'о',
         # 'ү': 'у',
+
+        'ѳ': 'ө',  # Careful! Renders the same
 
         # '-': None,
         # '–': None,
@@ -28,17 +30,25 @@ class Tokenizer:
 
     # WORD_PATTERN = re.compile(r'\b[А-Яа-я]+(?:[-–—][А-Яа-я]+)*\b')
     WORD_PATTERN = re.compile(
-        r'\d+-[а-яА-ЯёңөүЁҢҮӨ]+|[а-яА-ЯёңөүЁҢҮӨa-zA-Z\d\.]+(?:,\d+)?\b'
+        r"""
+         (?:[0-9]+-[а-яА-ЯёңөүЁҢҮӨa-zA-Z]+)
+        |(?:(?:[а-яА-ЯёңөүЁҢҮӨa-zA-Z0-9\.]+)(?:,[0-9]+)?\b)
+        """,
+        flags=re.VERBOSE
     )
 
     # INNER_CLEAN_PATTERN = re.compile(r'[-–—]')
 
     SENTENCE_SPLIT_PATERN = re.compile(
-        r'(?:\.+\s+(?=[А-ЯЁҢҮӨ]|[^\w\s]))|'
-        r'(?:(?<=[а-яёңүө])\.+\s*(?=[А-ЯЁҢҮӨ]|[^\w\s]))|'
-        r'[\|\(\)\[\]\{\}\…]+|'
-        r'(?:\n(?=[А-ЯЁҢҮӨ]|[^\w\s]))|'
-        r'(?:\:(?=\D))'
+        r"""
+         (?:\.+\s+(?=[A-ZА-ЯЁҢҮӨ]|[^\w\s]))
+        |(?:(?<=[a-zа-яёңүө ])\.{2,})
+        |(?:(?<=[a-zа-яёңүө ])\.\s*(?=[A-ZА-ЯЁҢҮӨ]|[^\w\s]))
+        |[\|\(\)\[\]\{\}\…]+
+        |(?:\n(?=[a-zа-яA-ZА-ЯЁҢҮӨ]|[^\w\s]))
+        |(?:\:(?=[^0-9]))
+        """,
+        flags=re.VERBOSE
     )
 
     def __init__(self):
@@ -57,16 +67,20 @@ class Tokenizer:
 if __name__ == '__main__':
     tokenizer = Tokenizer()
 
-    print(tokenizer.SENTENCE_SPLIT_PATERN.pattern)
-    print(tokenizer.WORD_PATTERN.pattern)
+    # print(tokenizer.SENTENCE_SPLIT_PATERN.pattern)
+    # print(tokenizer.WORD_PATTERN.pattern)
 
     # for filename in os.listdir(f'{file_location}/../results/texts'):
-    for filename in ('25875.txt',):
+    for filename in ('28158.txt',):
         with open(f'{file_location}/../results/texts/{filename}', 'r', encoding='utf-8') as file:
             text = file.read()
             # print(text)
 
             for sentence in tokenizer.process_text(text):
-                print(sentence)
+                # print(sentence)
                 for word in sentence:
                     assert ' ' not in word, filename
+
+
+# Check on:
+# 28158 - Runaway REGEX
