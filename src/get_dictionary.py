@@ -4,10 +4,12 @@ import os
 file_location = os.path.dirname(os.path.abspath(__file__))
 
 
-def get_dictionary() -> tuple[dict[str, list[str]], dict[str, str]]:
-    print('[Dictionary] Loading kaikii dictionary...')
+def _load_file(dictionary_name) -> tuple[dict[str, list[str]], dict[str, str]]:
+    print(f'[Dictionary] Loading {dictionary_name} dictionary...')
+
     pre_dictionary: list[tuple[str, list[str]]] = []
-    with open(f'{file_location}/../results/kaikki_words_by_base.txt', 'r', encoding='utf-8') as file:
+
+    with open(f'{file_location}/../results/{dictionary_name}.txt', 'r', encoding='utf-8') as file:
         for line in filter(None, map(str.strip, file)):
             if not line.startswith('├╴'):
                 pre_dictionary.append((line, []))
@@ -31,5 +33,17 @@ def get_dictionary() -> tuple[dict[str, list[str]], dict[str, str]]:
     return dictionary, word_to_base
 
 
+def get_kaikki_tili() -> tuple[dict[str, list[str]], dict[str, str]]:
+    return _load_file('kaikki_words_by_base')
+
+
+def get_kyrgyz_tili() -> tuple[dict[str, list[str]], dict[str, str]]:
+    return _load_file('kyrgyz_tili_words_by_base')
+
+
+get_dictionary = get_kaikki_tili
+
+
 if __name__ == '__main__':
     get_dictionary()
+    get_kyrgyz_tili()

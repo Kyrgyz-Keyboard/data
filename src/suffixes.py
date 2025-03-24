@@ -1,11 +1,15 @@
 from functools import cache
 import sys
+import os
 
 if __name__ == '__main__':
     sys.path.append('../')
 
-from src.get_dictionary import get_dictionary
+from src.get_dictionary import get_dictionary, get_kyrgyz_tili
 from src.tokenizer import Tokenizer
+
+
+file_location = os.path.dirname(os.path.abspath(__file__))
 
 
 class SuffixTrie:
@@ -21,22 +25,20 @@ class SuffixTrie:
 
     @cache  # noqa
     def remove_suffixes(self, word: str) -> str:
-        while True:
-            node = self.trie
-            for i in range(len(word) - 1, -1, -1):
-                char = word[i]
-                if char not in node:
-                    return word
-                node = node[char]
-                if '$' in node:
-                    word = word[:i]
-                    break
-            else:
+        node = self.trie
+        for i in range(len(word) - 1, -1, -1):
+            char = word[i]
+            if char not in node:
                 return word
+            node = node[char]
+            if '$' in node:
+                return word[:i]
+        return word
 
 
 def get_suffix_trie() -> SuffixTrie:
     dictionary, _ = get_dictionary()
+    kyrgyz_tili_dictionary, _ = get_kyrgyz_tili()
 
     handmade_suffixes = {
         'чы', 'чи', 'чу', 'чү',
@@ -88,9 +90,9 @@ def get_suffix_trie() -> SuffixTrie:
 
         'ум', 'үм'
     }
-    handmade_suffixes = {suffix.translate(Tokenizer.TRANSLATION_TABLE) for suffix in handmade_suffixes}
+    suffixes = {suffix.translate(Tokenizer.TRANSLATION_TABLE) for suffix in handmade_suffixes}
 
-    print(f'[Suffixes] Hand-made suffixes: {len(handmade_suffixes)}')
+    print(f'[Suffixes] Hand-made suffixes: {len(suffixes)}')
 
     dictionary_suffixes = set()
     for word, forms in dictionary.items():
@@ -103,8 +105,23 @@ def get_suffix_trie() -> SuffixTrie:
 
     print(f'[Suffixes] Dictionary suffixes: {len(dictionary_suffixes)}')
 
-    suffixes = handmade_suffixes.union(dictionary_suffixes)
+    kyrgyz_tili_dictionary_suffixes = set()
+    for word, forms in kyrgyz_tili_dictionary.items():
+        for form in forms:
+            if not form.startswith(word):
+                continue
+            suffix = form.removeprefix(word)
+            if suffix:
+                kyrgyz_tili_dictionary_suffixes.add(suffix)
+
+    print(f'[Suffixes] Dictionary (kyrgyz_tili) suffixes: {len(kyrgyz_tili_dictionary_suffixes)}')
+
+    suffixes = suffixes.union(dictionary_suffixes)
+    suffixes = suffixes.union(kyrgyz_tili_dictionary_suffixes)
     print(f'[Suffixes] Total suffixes: {len(suffixes)}')
+
+    with open(f'{file_location}/../results/suffixes.txt', 'w', encoding='utf-8') as file:
+        file.write('\n'.join(sorted(suffixes)))
 
     return SuffixTrie(suffixes)
 

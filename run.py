@@ -1,16 +1,15 @@
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from threading import Lock as LockType
 from multiprocessing import Manager
 # from collections import defaultdict
 from time import perf_counter
 from math import ceil
-import itertools
 import os
 
 from datasets import load_dataset
 
 # from src.constants import TRANSLATION_TABLE, WORD_PATTERN  # , INNER_CLEAN_PATTERN
-# from src.suffixes import SuffixTrie, get_suffix_trie
+from src.suffixes import SuffixTrie, get_suffix_trie
 from src.tokenizer import Tokenizer
 
 
@@ -25,27 +24,33 @@ def process_chunk(
     worker_num: int,
     file_sys_lock: LockType,
     texts: list[tuple[int, str]],
-    # suffix_trie: SuffixTrie,
+    suffix_trie: SuffixTrie,
 ):
     # print(f'Worker {batch_num}_{worker_num} started processing {len(texts)} texts')
-    sentencies: list[str] = []
+    # sentencies: list[str] = []
+    word_bases: set[str] = set()
 
     for text_id, text in texts:
-        with open(f'results/texts/{text_id}.txt', 'w', encoding='utf-8') as file:
-            file.write(text)
+        # with open(f'results/texts/{text_id}.txt', 'w', encoding='utf-8') as file:
+        #     file.write(text)
 
-        sentencies.extend(map(' '.join, tokenizer.process_text(text)))
+        # sentencies.extend(map(' '.join, tokenizer.process_text(text)))
 
         # for match in WORD_PATTERN.finditer(text.lower().translate(TRANSLATION_TABLE)):
         #     word_freq[suffix_trie.remove_suffixes(match.group())] += 1
 
-    with open(f'results/sentencies/{batch_num}_{worker_num}.txt', 'w', encoding='utf-8') as file:
-        file.write('\n'.join(sentencies))
+        for sentence in tokenizer.process_text(text):
+            for word in sentence:
+                word_bases.add(suffix_trie.remove_suffixes(word))
 
-    with file_sys_lock, open('results/sentencies.txt', 'a', encoding='utf-8') as file:
-        file.write('\n'.join(sentencies))
+    # with open(f'results/sentencies/{batch_num}_{worker_num}.txt', 'w', encoding='utf-8') as file:
+    #     file.write('\n'.join(sentencies))
 
-    return sentencies
+    # with file_sys_lock, open('results/sentencies.txt', 'a', encoding='utf-8') as file:
+    #     file.write('\n'.join(sentencies))
+
+    # return sentencies
+    return word_bases
 
 
 # def merge_dicts(*dicts: dict[str, int]) -> dict[str, int]:
@@ -57,7 +62,7 @@ def process_chunk(
 
 
 def main():
-    # suffix_trie = get_suffix_trie()
+    suffix_trie = get_suffix_trie()
     file_sys_lock = Manager().Lock()
 
     with open('results/sentencies.txt', 'w', encoding='utf-8'):
@@ -84,6 +89,7 @@ def main():
 
     # word_freq: dict[str, int] = defaultdict(int)
     # sentencies: list[str] = []
+    all_word_bases: set[str] = set()
 
     for batch_num, batch in enumerate(dataset.iter(batch_size=BATCH_SIZE), 1):
         print(f'Processing batch {batch_num}/{batches_to_process}...')
@@ -104,14 +110,19 @@ def main():
 
         with ProcessPoolExecutor(max_workers=num_workers) as executor:
             # print('Running workers...')
-            executor.map(
-                process_chunk,
-                itertools.repeat(batch_num),
-                itertools.count(),
-                itertools.repeat(file_sys_lock),
-                chunks,
-                # itertools.repeat(suffix_trie)
-            )
+            for future in as_completed((
+                executor.submit(
+                    process_chunk,
+                    batch_num,
+                    i,
+                    file_sys_lock,
+                    chunk,
+                    suffix_trie
+                )
+                for i, chunk in enumerate(chunks)
+            )):
+                # sentencies.extend(future.result())
+                all_word_bases.update(future.result())
 
         print(f'Batch processed in {perf_counter() - start_time:.2f} seconds')
         del chunks
@@ -121,24 +132,31 @@ def main():
         # for result in results:
         #     sentencies.extend(result)
 
-    # print('Cleaning results...')
+    print('Cleaning results...')
     # word_freq = {
     #     word: freq
     #     for word, freq in word_freq.items()
     #     if freq >= 100 and len(word) >= 2
     # }
+    all_word_bases = {
+        word
+        for word in all_word_bases
+        if len(word) >= 2
+    }
 
     # print('Sorting...')
     # words_sorted = sorted(word_freq.items(), key=lambda x: x[1], reverse=True)
+    # del word_freq
+    all_word_bases_sorted = sorted(all_word_bases)
+    del all_word_bases
 
-    # print('Saving results...')
+    print('Saving results...')
     # with open('results/word_freq.txt', 'w', encoding='utf-8') as file:
-    #     for word, freq in words_sorted:
-    #         file.write(f'{word} {freq}\n')
-
+    #     file.write('\n'.join(f'{word} {freq}' for word, freq in words_sorted))
     # with open('results/sentencies.txt', 'w', encoding='utf-8') as file:
-    #     for sentence in sentencies:
-    #         file.write(f'{sentence}\n')
+    #     file.write('\n'.join(sentencies))
+    with open('results/word_bases.txt', 'w', encoding='utf-8') as file:
+        file.write('\n'.join(all_word_bases_sorted))
 
 
 if __name__ == '__main__':
