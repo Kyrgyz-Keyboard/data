@@ -26,14 +26,17 @@ class SuffixTrie:
     @cache  # noqa
     def remove_suffix(self, word: str) -> tuple[str, str]:
         node = self.trie
+        longest_index = len(word)
+
         for i in range(len(word) - 1, -1, -1):
             char = word[i]
             if char not in node:
-                return word, ''
+                break
             node = node[char]
             if '$' in node:
-                return word[:i], word[i:]
-        return word, ''
+                longest_index = i
+
+        return word[:longest_index], word[longest_index:]
 
 
 def get_suffix_trie() -> SuffixTrie:

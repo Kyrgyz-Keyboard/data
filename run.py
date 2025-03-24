@@ -165,7 +165,7 @@ def main():
 
     print('Cleaning results...')
     # word_freq = {word: freq for word, freq in word_freq.items() if freq >= 100 and len(word) > 1}
-    word_freq = {word: freq for word, freq in word_freq.items() if len(word) > 1}
+    # word_freq = {word: freq for word, freq in word_freq.items() if len(word) > 1}
 
     print('Sorting...')
     word_freq_sorted = sorted(word_freq.items(), key=lambda x: x[1], reverse=True)
