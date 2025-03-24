@@ -1,5 +1,6 @@
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from threading import Lock as LockType
+from collections import defaultdict
 from multiprocessing import Manager
 from time import perf_counter
 from math import ceil
@@ -30,13 +31,13 @@ def process_chunk(
     sentencies_of_bases: list[list[str]] = []
     sentencies_of_suffixes: list[list[str]] = []
 
-    word_freq: dict[str, int] = {}
-    base_freq: dict[str, int] = {}
-    suffix_freq: dict[str, int] = {}
+    word_freq: dict[str, int] = defaultdict(int)
+    base_freq: dict[str, int] = defaultdict(int)
+    suffix_freq: dict[str, int] = defaultdict(int)
 
-    for _, text in texts:
-        # with open(f'results/texts/{text_id}.txt', 'w', encoding='utf-8') as file:
-        #     file.write(text)
+    for text_id, text in texts:
+        with open(f'results/texts/{text_id}.txt', 'w', encoding='utf-8') as file:
+            file.write(text)
 
         for sentence in tokenizer.process_text(text):
             sentencies.append([])
