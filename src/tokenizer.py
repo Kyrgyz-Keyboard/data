@@ -31,11 +31,7 @@ class Tokenizer:
     # WORD_PATTERN = re.compile(r'\b[А-Яа-я]+(?:[-–—][А-Яа-я]+)*\b')
     WORD_PATTERN = re.compile(
         r"""
-        # ([0-9]+-[а-яА-ЯёңөүЁҢҮӨa-zA-Z]+)  # число-слово
-        #|(?:
-          (?:
-             (?:[а-яА-ЯёңөүЁҢҮӨa-zA-Z0-9\.]+)(?:,[0-9]+)?\b
-        )
+        [а-яА-Яёңөүa-zA-ZЁҢҮӨ0-9\.\:]+[а-яА-Яёңөүa-zA-ZЁҢҮӨ0-9\.](?:,[0-9]+)?\b
         """,
         flags=re.VERBOSE
     )
@@ -44,26 +40,18 @@ class Tokenizer:
 
     SENTENCE_SPLIT_PATERN = re.compile(
         r"""
-        # Ellipsis and other instances of multiple dots are always separators
-        (?:
-         \.{2,}
-        )
-        # Regular dot, as the end of sentence
-        |(?:
-            (?<=[a-zа-яёңүө ])\.\s*(?=[A-ZА-ЯЁҢҮӨ]|[^\w\s])
-        )
-        # Weird symbols are contextual separators
-        |(?:
-            [\|\(\)\[\]\{\}\…]+
-        )
         # Linebreak is always a separator
-        |(?:
-            \n
-        )
+          \n
+        # Weird symbols are contextual separators
+        | [\|\(\)\[\]\{\}\…\\\/]+
         # Colon with anything except digit afterward (to discard 00:00)
-        |(?:
-            \:(?=[^0-9])
-        )
+        | \:(?=[^0-9])
+        # Ellipsis and other instances of multiple dots are always separators
+        | \.{2,}
+        # Dot after lowercase that follows with an uppercase letter or wired symbol
+        | (?<=[a-zа-яёңүө ])\.\s*(?=[A-ZА-ЯЁҢҮӨ]|[^\w\s])
+        # Dot after uppercase that follows with a lowercase letter or wired symbol
+        | (?<=[A-ZА-ЯЁҢҮӨ ])\.\s*(?=[a-zа-яёңүө]|[^\w\s])
         """,
         flags=re.VERBOSE
     )
