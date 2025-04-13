@@ -4,10 +4,11 @@ import os
 
 import requests
 
-ROOT = '../'
-sys.path.append(ROOT)
+if __name__ == '__main__':
+    sys.path.append('../')
 
-from src.utils import mkpath
+from src.utils import PathMagic
+mkpath = PathMagic(__file__)
 
 
 # https://github.com/tatuylonen/wiktextract
@@ -19,7 +20,7 @@ ALLOWED_LETTERS = {letter for letter in 'абвгдеёжзийклмнпрст�
 def gen():
     print('Generating dictionary from kaikki...')
 
-    dictionary_path = mkpath(ROOT, 'results/kaikki.org-dictionary-Kyrgyz.jsonl')
+    dictionary_path = mkpath('../results/kaikki.org-dictionary-Kyrgyz.jsonl')
     if not os.path.isfile(dictionary_path):
         print('Downloading dictionary...')
         with open(dictionary_path, 'wb') as file:
@@ -63,7 +64,7 @@ def gen():
         for word in words:
             file.write(json.dumps(word, ensure_ascii=False, indent=4) + '\n')
 
-    # with open(mkpath(ROOT, 'results/kaikki_words.txt'), 'w', encoding='utf-8') as file:
+    # with open(mkpath('../results/kaikki_words.txt'), 'w', encoding='utf-8') as file:
     #     for word in words:
     #         file.write(
     #             word['word']
@@ -103,7 +104,7 @@ def gen():
     print(f'Total word bases: {len(words_by_base)}')
     print(f'Total word forms: {sum(len(forms) for forms in words_by_base.values()) + len(words_by_base)}')
 
-    with open(mkpath(ROOT, 'results/kaikki_words_by_base.txt'), 'w', encoding='utf-8') as file:
+    with open(mkpath('../results/kaikki_words_by_base.txt'), 'w', encoding='utf-8') as file:
         for word, forms in words_by_base.items():
             file.write('\n├╴'.join([word] + sorted(forms)) + '\n\n')
 

@@ -1,8 +1,11 @@
+import sys
 import re
-import os
 
+if __name__ == '__main__':
+    sys.path.append('../')
 
-file_location = os.path.dirname(os.path.abspath(__file__))
+from src.utils import PathMagic
+mkpath = PathMagic(__file__)
 
 
 class Tokenizer:
@@ -79,7 +82,7 @@ if __name__ == '__main__':
 
     # for filename in os.listdir(f'{file_location}/../results/texts'):
     for filename in ('test.txt',):
-        with open(f'{file_location}/../results/{filename}', 'r', encoding='utf-8') as file:
+        with open(mkpath(f'../results/{filename}'), 'r', encoding='utf-8') as file:
             text = file.read()
             # print(text)
 
