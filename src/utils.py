@@ -33,5 +33,5 @@ class PathMagic:
 def write_file(path: str, data: str, append: bool = False):
     if not os.path.isdir(os.path.dirname(path)):
         os.makedirs(os.path.dirname(path))
-    with open(path, 'w', encoding='utf-8') as file:
+    with open(path, ('a' if append else 'w'), encoding='utf-8') as file:
         file.write(data)
