@@ -18,8 +18,8 @@ BATCH_SIZE = 100_000
 
 tokenizer = Tokenizer()
 
-SENTENCIES_FS_LOCK: LockType
-SENTENCIES_OF_BASES_SIMPLE_FS_LOCK: LockType
+SENTENCES_FS_LOCK: LockType
+SENTENCES_OF_BASES_SIMPLE_FS_LOCK: LockType
 
 
 def process_chunk(
@@ -30,8 +30,8 @@ def process_chunk(
 ):
     # print(f'Worker {batch_num}_{worker_num} started processing {len(texts)} texts')
 
-    sentencies: list[list[str]] = []
-    sentencies_of_bases_simple: list[list[str]] = []
+    sentences: list[list[str]] = []
+    sentences_of_bases_simple: list[list[str]] = []
 
     word_freq: dict[str, int] = defaultdict(int)
     base_freq: dict[str, int] = defaultdict(int)
@@ -40,8 +40,8 @@ def process_chunk(
         write_file(f'results/texts/{batch_num}_{worker_num}.txt', text)
 
         for sentence in tokenizer.process_text(text):
-            sentencies.append([])
-            sentencies_of_bases_simple.append([])
+            sentences.append([])
+            sentences_of_bases_simple.append([])
 
             for word in sentence:
                 base, suffix = suffix_trie.remove_suffix(word)
@@ -49,30 +49,30 @@ def process_chunk(
                 word_freq[word] += 1
                 base_freq[base] += 1
 
-                sentencies[-1].append(word)
-                sentencies_of_bases_simple[-1].append(base)
+                sentences[-1].append(word)
+                sentences_of_bases_simple[-1].append(base)
 
-    # print(f'Worker {batch_num}_{worker_num} is storing sentencies...')
+    # print(f'Worker {batch_num}_{worker_num} is storing sentences...')
     write_file(
-        f'results/sentencies/{batch_num}_{worker_num}.txt',
-        '\n'.join(map(' '.join, sentencies))
+        f'results/sentences/{batch_num}_{worker_num}.txt',
+        '\n'.join(map(' '.join, sentences))
     )
-    with SENTENCIES_FS_LOCK:
+    with SENTENCES_FS_LOCK:
         write_file(
-            'results/sentencies.txt',
-            '\n'.join(map(' '.join, sentencies)),
+            'results/sentences.txt',
+            '\n'.join(map(' '.join, sentences)),
             append=True
         )
 
-    # print(f'Worker {batch_num}_{worker_num} is storing sentencies of bases...')
+    # print(f'Worker {batch_num}_{worker_num} is storing sentences of bases...')
     write_file(
-        f'results/sentencies_of_bases_simple/{batch_num}_{worker_num}.txt',
-        '\n'.join(map(' '.join, sentencies_of_bases_simple))
+        f'results/sentences_of_bases_simple/{batch_num}_{worker_num}.txt',
+        '\n'.join(map(' '.join, sentences_of_bases_simple))
     )
-    with SENTENCIES_OF_BASES_SIMPLE_FS_LOCK:
+    with SENTENCES_OF_BASES_SIMPLE_FS_LOCK:
         write_file(
-            'results/sentencies_of_bases_simple_simple.txt',
-            '\n'.join(map(' '.join, sentencies_of_bases_simple)),
+            'results/sentences_of_bases_simple_simple.txt',
+            '\n'.join(map(' '.join, sentences_of_bases_simple)),
             append=True
         )
 
@@ -81,18 +81,18 @@ def process_chunk(
 
 
 def init_pool(
-    sentencies_fs_lock: LockType,
-    sentencies_of_bases_simple_fs_lock: LockType,
+    sentences_fs_lock: LockType,
+    sentences_of_bases_simple_fs_lock: LockType,
 ):
-    global SENTENCIES_FS_LOCK, SENTENCIES_OF_BASES_SIMPLE_FS_LOCK
-    SENTENCIES_FS_LOCK = sentencies_fs_lock
-    SENTENCIES_OF_BASES_SIMPLE_FS_LOCK = sentencies_of_bases_simple_fs_lock
+    global SENTENCES_FS_LOCK, SENTENCES_OF_BASES_SIMPLE_FS_LOCK
+    SENTENCES_FS_LOCK = sentences_fs_lock
+    SENTENCES_OF_BASES_SIMPLE_FS_LOCK = sentences_of_bases_simple_fs_lock
 
 
 def main():
     suffix_trie = get_suffix_trie()
-    sentencies_fs_lock = Lock()
-    sentencies_of_bases_simple_fs_lock = Lock()
+    sentences_fs_lock = Lock()
+    sentences_of_bases_simple_fs_lock = Lock()
 
     print('Loading dataset...')
     dataset = load_dataset(
@@ -136,7 +136,7 @@ def main():
         with ProcessPoolExecutor(
             max_workers=num_workers,
             initializer=init_pool,
-            initargs=(sentencies_fs_lock, sentencies_of_bases_simple_fs_lock)
+            initargs=(sentences_fs_lock, sentences_of_bases_simple_fs_lock)
         ) as executor:
             # print('Running workers...')
             for future in as_completed((
