@@ -176,7 +176,7 @@ def main():
 
     print('Saving results...')
     write_file('results/word_freq.txt', '\n'.join(f'{word} {freq}' for word, freq in word_freq_sorted))
-    write_file('results/base_freq.txt','\n'.join(f'{base} {freq}' for base, freq in base_freq_sorted))
+    write_file('results/base_freq.txt', '\n'.join(f'{base} {freq}' for base, freq in base_freq_sorted))
 
 
 if __name__ == '__main__':
