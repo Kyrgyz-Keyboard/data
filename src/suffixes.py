@@ -5,8 +5,9 @@ import os
 if __name__ == '__main__':
     sys.path.append('../')
 
-from src.get_dictionary import get_dictionary, get_kyrgyz_tili
+from src.get_dictionary import get_kaikki_tili, get_kyrgyz_tili
 from src.tokenizer import Tokenizer
+from src.utils import write_file
 
 
 file_location = os.path.dirname(os.path.abspath(__file__))
@@ -40,7 +41,7 @@ class SuffixTrie:
 
 
 def get_suffix_trie() -> SuffixTrie:
-    dictionary, _ = get_dictionary()
+    dictionary, _ = get_kaikki_tili()
     kyrgyz_tili_dictionary, _ = get_kyrgyz_tili()
 
     handmade_suffixes = {
@@ -123,8 +124,7 @@ def get_suffix_trie() -> SuffixTrie:
     suffixes = suffixes.union(kyrgyz_tili_dictionary_suffixes)
     print(f'[Suffixes] Total suffixes: {len(suffixes)}')
 
-    with open(f'{file_location}/../results/suffixes.txt', 'w', encoding='utf-8') as file:
-        file.write('\n'.join(sorted(suffixes)))
+    write_file(f'{file_location}/../results/suffixes.txt', '\n'.join(sorted(suffixes)))
 
     return SuffixTrie(suffixes)
 

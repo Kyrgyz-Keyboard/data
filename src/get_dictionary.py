@@ -41,9 +41,6 @@ def get_kyrgyz_tili() -> tuple[dict[str, list[str]], dict[str, str]]:
     return _load_file('kyrgyz_tili_words_by_base')
 
 
-get_dictionary = get_kaikki_tili
-
-
 if __name__ == '__main__':
-    get_dictionary()
+    get_kaikki_tili()
     get_kyrgyz_tili()
