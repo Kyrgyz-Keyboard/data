@@ -1,11 +1,10 @@
-from typing import Any
+from typing import no_type_check
 
-from multiprocessing.synchronize import Event as EventType
-from multiprocessing.queues import Queue as QueueType
-from multiprocessing import Process, Event
-
+from multiprocessing import Process, Event, Value, Lock, Queue
 from contextlib import contextmanager, suppress, chdir
+from concurrent.futures import ThreadPoolExecutor
 from queue import Empty as EmptyQueueException
+from time import sleep
 import sys
 import os
 
@@ -49,74 +48,137 @@ def write_file(path: str, data: str | bytes, append: bool = False, binary: bool 
         file.write(data)
 
 
+def empty_file(path: str):
+    path = mkpath(path)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+
+    with open(path, 'w', encoding='utf-8') as file:
+        file.write('')
+
+
 def print_async(*args, **kwargs):
     print(*args, **kwargs)
     sys.stdout.flush()
 
 
 class FileWriter:
-    _queue: QueueType[tuple[tuple[Any], dict[str, Any]]]
-    _stop_event: EventType
+    _queue: Queue          # type: ignore
+    _stop_event: Event     # type: ignore
     _process: Process
+    _data_size: Value      # type: ignore
+    _wait_lock: Lock       # type: ignore
+    _pending_tasks: Value  # type: ignore
+    _max_size: int = 1_000_000_000  # 1 GB
 
     @classmethod
-    def init(cls, queue):
-        cls._queue = queue
+    def init(cls):
+        cls._queue = Queue()
         cls._stop_event = Event()
+        cls._data_size = Value('i', 0)
+        cls._wait_lock = Lock()
+        cls._pending_tasks = Value('i', 0)
 
         cls._process = Process(
             target=cls._writer_worker,
-            args=(cls._queue, cls._stop_event)
+            args=(cls._queue, cls._stop_event, cls._data_size),
         )
         cls._process.start()
 
+        return (cls._queue, cls._data_size, cls._wait_lock, cls._pending_tasks)
+
     @classmethod
-    def bind_worker(cls, queue):
+    def bind_worker(cls, queue, total_size, wait_lock, pending_tasks):
         cls._queue = queue
+        cls._data_size = total_size
+        cls._wait_lock = wait_lock
+        cls._pending_tasks = pending_tasks
 
     @classmethod
-    def _writer_worker(cls, queue, stop_event):
-        while not stop_event.is_set() or not queue.empty():
-            try:
-                args, kwargs = queue.get(timeout=0.5)
-            except EmptyQueueException:
-                continue
-            print_async('[FileWriter] Writing to', args[0])
-            write_file(*args, **kwargs)
-            print_async('[FileWriter] Finished writing to', args[0])
+    def _write_task(cls, args, kwargs, total_size):
+        path, data, *args = args
+        # print_async('[FileWriter] Writing to', path)
+        try:
+            write_file(path, data, *args, **kwargs)
+        except Exception as e:
+            print_async(f'[FileWriter] Error writing to {path}: {e}')
+        finally:
+            with total_size.get_lock():
+                total_size.value -= len(data)
+        # print_async('[FileWriter] Finished writing to', path)
 
     @classmethod
-    def write_file(cls, *args, **kwargs):
-        print_async(f'[FileWriter] New task: write to {args[0]}. Tasks in queue: {cls._queue.qsize() + 1}')
-        cls._queue.put((args, kwargs))
+    def _writer_worker(cls, queue, stop_event, total_size):
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            while not queue.empty() or not stop_event.is_set():
+                try:
+                    args, kwargs = queue.get(timeout=0.5)
+                except EmptyQueueException:
+                    continue
+                # print_async('[FileWriter] Starting task:', args, kwargs)
+                executor.submit(cls._write_task, args, kwargs, total_size)
 
     @classmethod
+    @no_type_check
+    def write_file(cls, path: str, data: str | bytes, *args, **kwargs):
+        with cls._pending_tasks.get_lock():
+            cls._pending_tasks.value += 1
+
+        data_size = len(data)
+        with cls._wait_lock:
+            while cls._data_size.value and cls._data_size.value + data_size > cls._max_size:
+                print_async(
+                    '[FileWriter] Data queue too large, waiting... '
+                    f'({cls._data_size.value} + {data_size} > {cls._max_size}, '
+                    f'{cls._queue.qsize()} tasks in queue, {cls._pending_tasks} pending)'
+                )
+                sleep(1)
+
+            with cls._data_size.get_lock():
+                cls._data_size.value += data_size
+
+        cls._queue.put(((path, data, *args), kwargs))
+
+        # print_async(
+        #     f'[FileWriter] New task: write to {path}. Tasks in queue: {cls._queue.qsize()}. '
+        #     f'Total size of text: {cls._data_size.value} characters'
+        # )
+
+        with cls._pending_tasks.get_lock():
+            cls._pending_tasks.value -= 1
+
+    @classmethod
+    @no_type_check
     def stop(cls):
         print_async('[FileWriter] Termination requested, waiting for all writes to finish...')
+        while cls._pending_tasks.value:
+            print_async(cls._pending_tasks.value)
+            sleep(1)
         cls._stop_event.set()
         cls._process.join()
+        assert cls._data_size.value == 0, (
+            f'[FileWriter] Not all writes have finished. '
+            f'Total size: {cls._data_size.value} characters'
+        )
         print_async('[FileWriter] Stopped')
 
 
 # def _test_worker(i):
-#     from time import sleep
 #     FileWriter.write_file(mkpath(f'../results/test/test_{i}.txt'), f'Worker {i}\n')
-#     sleep(3)
+#     # sleep(3)
 
+
+# FileWriter._max_size = 40
 
 # if __name__ == '__main__':
-#     from multiprocessing import Manager, Pool
-#     from time import sleep
+#     from multiprocessing import Pool
 
-#     manager = Manager()
-#     queue = manager.Queue()
+#     bind_args = FileWriter.init()
 
-#     FileWriter.init(queue)
-
-#     with Pool(initializer=FileWriter.bind_worker, initargs=(queue,)) as pool:
+#     with Pool(processes=4, initializer=FileWriter.bind_worker, initargs=bind_args) as pool:
 #         pool.map(_test_worker, range(10))
 #         # pool.map_async(_test_worker, range(10))
-#         sleep(1)
 #         # FileWriter.stop()
+
+#     # sleep(1)
 
 #     FileWriter.stop()

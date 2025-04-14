@@ -1,5 +1,4 @@
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from multiprocessing import Manager
 from collections import defaultdict
 from time import perf_counter
 from math import ceil
@@ -7,9 +6,9 @@ import os
 
 from datasets import load_dataset
 
+from src.utils import FileWriter, print_async, empty_file
 from src.suffixes import SuffixTrie, get_suffix_trie
 from src.tokenizer import Tokenizer
-from src.utils import FileWriter
 
 
 BATCH_SIZE = 100_000
@@ -24,7 +23,7 @@ def process_chunk(
     texts: tuple[tuple[int, str], ...],
     suffix_trie: SuffixTrie
 ):
-    # print(f'Worker {batch_num}_{worker_num} started processing {len(texts)} texts')
+    print_async(f'Worker {batch_num}_{worker_num} started processing {len(texts)} texts')
 
     sentences: list[list[str]] = []
     sentences_of_bases_simple: list[list[str]] = []
@@ -35,7 +34,7 @@ def process_chunk(
     # base_freq_new: dict[str, int] = defaultdict(int)
 
     for _, text in texts:
-        FileWriter.write_file(f'results/texts/{batch_num}_{worker_num}.txt', text)
+        # FileWriter.write_file(f'results/texts/{batch_num}_{worker_num}_{text_index}.txt', text)
 
         for sentence in tokenizer.process_text(text):
             sentences.append([])
@@ -53,7 +52,7 @@ def process_chunk(
                 sentences_of_bases_simple[-1].append(base_simple)
                 # sentences_of_bases_new[-1].append(base_new)
 
-    # print(f'Worker {batch_num}_{worker_num} is storing sentences...')
+    # print_async(f'Worker {batch_num}_{worker_num} is storing sentences...')
     FileWriter.write_file(
         f'results/sentences/{batch_num}_{worker_num}.txt',
         '\n'.join(map(' '.join, sentences))
@@ -64,7 +63,7 @@ def process_chunk(
         append=True
     )
 
-    # print(f'Worker {batch_num}_{worker_num} is storing sentences of bases...')
+    # print_async(f'Worker {batch_num}_{worker_num} is storing sentences of bases...')
     FileWriter.write_file(
         f'results/sentences_of_bases_simple/{batch_num}_{worker_num}.txt',
         '\n'.join(map(' '.join, sentences_of_bases_simple))
@@ -85,13 +84,16 @@ def process_chunk(
     #     append=True
     # )
 
-    # print(f'Worker {batch_num}_{worker_num} finished writing results')
+    # print_async(f'Worker {batch_num}_{worker_num} finished writing results')
     return word_freq, base_freq_simple  # , base_freq_new
 
 
 def main():
-    FileWriter.init(file_writer_queue := Manager().Queue())
+    bind_args = FileWriter.init()
     suffix_trie = get_suffix_trie()
+
+    empty_file('results/sentences.txt')
+    empty_file('results/sentences_of_bases_simple.txt')
 
     print('Loading dataset...')
     dataset = load_dataset(
@@ -135,7 +137,7 @@ def main():
         with ProcessPoolExecutor(
             max_workers=num_workers,
             initializer=FileWriter.bind_worker,
-            initargs=(file_writer_queue,)
+            initargs=bind_args
         ) as executor:
             # print('Running workers...')
             for future in as_completed((
