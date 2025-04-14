@@ -1,7 +1,6 @@
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from multiprocessing.synchronize import Lock as LockType
+from multiprocessing import Manager
 from collections import defaultdict
-from multiprocessing import Lock
 from time import perf_counter
 from math import ceil
 import os
@@ -10,7 +9,7 @@ from datasets import load_dataset
 
 from src.suffixes import SuffixTrie, get_suffix_trie
 from src.tokenizer import Tokenizer
-from src.utils import write_file
+from src.utils import FileWriter
 
 
 BATCH_SIZE = 100_000
@@ -18,81 +17,81 @@ BATCH_SIZE = 100_000
 
 tokenizer = Tokenizer()
 
-SENTENCES_FS_LOCK: LockType
-SENTENCES_OF_BASES_SIMPLE_FS_LOCK: LockType
-
 
 def process_chunk(
     batch_num: int,
     worker_num: int,
     texts: tuple[tuple[int, str], ...],
-    suffix_trie: SuffixTrie,
+    suffix_trie: SuffixTrie
 ):
     # print(f'Worker {batch_num}_{worker_num} started processing {len(texts)} texts')
 
     sentences: list[list[str]] = []
     sentences_of_bases_simple: list[list[str]] = []
+    # sentences_of_bases_new: list[list[str]] = []
 
     word_freq: dict[str, int] = defaultdict(int)
-    base_freq: dict[str, int] = defaultdict(int)
+    base_freq_simple: dict[str, int] = defaultdict(int)
+    # base_freq_new: dict[str, int] = defaultdict(int)
 
     for _, text in texts:
-        write_file(f'results/texts/{batch_num}_{worker_num}.txt', text)
+        FileWriter.write_file(f'results/texts/{batch_num}_{worker_num}.txt', text)
 
         for sentence in tokenizer.process_text(text):
             sentences.append([])
             sentences_of_bases_simple.append([])
 
             for word in sentence:
-                base, suffix = suffix_trie.remove_suffix(word)
+                base_simple, _ = suffix_trie.remove_suffix(word)
+                # base_new, _ = remove_suffix_new(word)
 
                 word_freq[word] += 1
-                base_freq[base] += 1
+                base_freq_simple[base_simple] += 1
+                # base_freq_new[base_new] += 1
 
                 sentences[-1].append(word)
-                sentences_of_bases_simple[-1].append(base)
+                sentences_of_bases_simple[-1].append(base_simple)
+                # sentences_of_bases_new[-1].append(base_new)
 
     # print(f'Worker {batch_num}_{worker_num} is storing sentences...')
-    write_file(
+    FileWriter.write_file(
         f'results/sentences/{batch_num}_{worker_num}.txt',
         '\n'.join(map(' '.join, sentences))
     )
-    with SENTENCES_FS_LOCK:
-        write_file(
-            'results/sentences.txt',
-            '\n'.join(map(' '.join, sentences)),
-            append=True
-        )
+    FileWriter.write_file(
+        'results/sentences.txt',
+        '\n'.join(map(' '.join, sentences)),
+        append=True
+    )
 
     # print(f'Worker {batch_num}_{worker_num} is storing sentences of bases...')
-    write_file(
+    FileWriter.write_file(
         f'results/sentences_of_bases_simple/{batch_num}_{worker_num}.txt',
         '\n'.join(map(' '.join, sentences_of_bases_simple))
     )
-    with SENTENCES_OF_BASES_SIMPLE_FS_LOCK:
-        write_file(
-            'results/sentences_of_bases_simple_simple.txt',
-            '\n'.join(map(' '.join, sentences_of_bases_simple)),
-            append=True
-        )
+    FileWriter.write_file(
+        'results/sentences_of_bases_simple.txt',
+        '\n'.join(map(' '.join, sentences_of_bases_simple)),
+        append=True
+    )
+
+    # FileWriter.write_file(
+    #     f'results/sentences_of_bases_new/{batch_num}_{worker_num}.txt',
+    #     '\n'.join(map(' '.join, sentences_of_bases_new)),
+    # )
+    # FileWriter.write_file(
+    #     'results/sentences_of_bases_new.txt',
+    #     '\n'.join(map(' '.join, sentences_of_bases_new)),
+    #     append=True
+    # )
 
     # print(f'Worker {batch_num}_{worker_num} finished writing results')
-    return word_freq, base_freq
-
-
-def init_pool(
-    sentences_fs_lock: LockType,
-    sentences_of_bases_simple_fs_lock: LockType,
-):
-    global SENTENCES_FS_LOCK, SENTENCES_OF_BASES_SIMPLE_FS_LOCK
-    SENTENCES_FS_LOCK = sentences_fs_lock
-    SENTENCES_OF_BASES_SIMPLE_FS_LOCK = sentences_of_bases_simple_fs_lock
+    return word_freq, base_freq_simple  # , base_freq_new
 
 
 def main():
+    FileWriter.init(file_writer_queue := Manager().Queue())
     suffix_trie = get_suffix_trie()
-    sentences_fs_lock = Lock()
-    sentences_of_bases_simple_fs_lock = Lock()
 
     print('Loading dataset...')
     dataset = load_dataset(
@@ -114,7 +113,7 @@ def main():
     )
 
     word_freq: dict[str, int] = {}
-    base_freq: dict[str, int] = {}
+    base_simple_freq: dict[str, int] = {}
 
     for batch_num, batch in enumerate(dataset.iter(batch_size=BATCH_SIZE), 1):
         print(f'Processing batch {batch_num}/{batches_to_process}...')
@@ -135,8 +134,8 @@ def main():
 
         with ProcessPoolExecutor(
             max_workers=num_workers,
-            initializer=init_pool,
-            initargs=(sentences_fs_lock, sentences_of_bases_simple_fs_lock)
+            initializer=FileWriter.bind_worker,
+            initargs=(file_writer_queue,)
         ) as executor:
             # print('Running workers...')
             for future in as_completed((
@@ -145,22 +144,22 @@ def main():
                     batch_num,
                     i,
                     chunk,
-                    suffix_trie,
+                    suffix_trie
                 )
                 for i, chunk in enumerate(chunks)
             )):
                 # print(f'Merging results from one of the workers in {batch_num}...')
-                word_freq_chunk, base_freq_chunk = future.result()
+                word_freq_chunk, base_simple_freq_chunk = future.result()
 
                 word_freq = {
                     word: word_freq.get(word, 0) + freq
                     for word, freq in word_freq_chunk.items()
                 }
-                base_freq = {
-                    base: base_freq.get(base, 0) + freq
-                    for base, freq in base_freq_chunk.items()
+                base_simple_freq = {
+                    base: base_simple_freq.get(base, 0) + freq
+                    for base, freq in base_simple_freq_chunk.items()
                 }
-                del word_freq_chunk, base_freq_chunk
+                del word_freq_chunk, base_simple_freq_chunk
 
         print(f'Batch processed in {perf_counter() - start_time:.2f} seconds')
         del chunks
@@ -171,12 +170,17 @@ def main():
 
     print('Sorting...')
     word_freq_sorted = sorted(word_freq.items(), key=lambda x: x[1], reverse=True)
-    base_freq_sorted = sorted(base_freq.items(), key=lambda x: x[1], reverse=True)
-    del word_freq, base_freq
+    base_simple_freq_sorted = sorted(base_simple_freq.items(), key=lambda x: x[1], reverse=True)
+    del word_freq, base_simple_freq
 
     print('Saving results...')
-    write_file('results/word_freq.txt', '\n'.join(f'{word} {freq}' for word, freq in word_freq_sorted))
-    write_file('results/base_freq.txt', '\n'.join(f'{base} {freq}' for base, freq in base_freq_sorted))
+    FileWriter.write_file('results/word_freq.txt', '\n'.join(f'{word} {freq}' for word, freq in word_freq_sorted))
+    FileWriter.write_file(
+        'results/base_simple_freq.txt',
+        '\n'.join(f'{base} {freq}' for base, freq in base_simple_freq_sorted)
+    )
+
+    FileWriter.stop()
 
 
 if __name__ == '__main__':
