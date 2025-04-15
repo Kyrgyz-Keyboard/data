@@ -6,7 +6,7 @@ import os
 
 from datasets import load_dataset
 
-from src.utils import FileWriter, print_async, empty_file
+from src.utils import print_async, FileWriter, empty_file
 from src.suffixes import SuffixTrie, get_suffix_trie
 from src.tokenizer import Tokenizer
 
@@ -55,11 +55,11 @@ def process_chunk(
     # print_async(f'Worker {batch_num}_{worker_num} is storing sentences...')
     FileWriter.write_file(
         f'results/sentences/{batch_num}_{worker_num}.txt',
-        '\n'.join(map(' '.join, sentences))
+        ''.join(sentence + '\n' for sentence in map(' '.join, sentences))
     )
     FileWriter.write_file(
         'results/sentences.txt',
-        '\n'.join(map(' '.join, sentences)),
+        ''.join(sentence + '\n' for sentence in map(' '.join, sentences)),
         append=True
     )
 
