@@ -102,7 +102,7 @@ def main():
         split='train',
         num_proc=4,
         # streaming=True
-    )
+    ).select_columns('text')
 
     print(f'Texts in dataset: {len(dataset)}')
 
@@ -117,39 +117,32 @@ def main():
     word_freq: dict[str, int] = {}
     base_simple_freq: dict[str, int] = {}
 
-    for batch_num, batch in enumerate(dataset.iter(batch_size=BATCH_SIZE), 1):
-        print(f'Processing batch {batch_num}/{batches_to_process}...')
-        texts = batch['text']
-        del batch
+    with ProcessPoolExecutor(
+        max_workers=num_workers,
+        initializer=FileWriter.bind_worker,
+        initargs=bind_args
+    ) as executor:
+        for batch_num, texts in enumerate((batch['text'] for batch in dataset.iter(batch_size=BATCH_SIZE)), 1):
+            print_async(f'Processing batch {batch_num}/{batches_to_process}...')
+            chunk_size = ceil(len(texts) / num_workers)
 
-        chunk_size = ceil(len(texts) / num_workers)
-        chunks = tuple(
-            tuple(
-                ((batch_num - 1) * BATCH_SIZE + i + j, text)
-                for j, text in enumerate(texts[i:i + chunk_size])
-            )
-            for i in range(0, len(texts), chunk_size)
-        )
-        del texts
-
-        start_time = perf_counter()
-
-        with ProcessPoolExecutor(
-            max_workers=num_workers,
-            initializer=FileWriter.bind_worker,
-            initargs=bind_args
-        ) as executor:
-            # print('Running workers...')
-            for future in as_completed((
+            start_time = perf_counter()
+            futures = [
                 executor.submit(
                     process_chunk,
                     batch_num,
                     i,
-                    chunk,
+                    tuple(
+                        ((batch_num - 1) * BATCH_SIZE + (i * chunk_size) + j, text)
+                        for j, text in enumerate(texts[i * chunk_size:(i + 1) * chunk_size])
+                    ),
                     suffix_trie
                 )
-                for i, chunk in enumerate(chunks)
-            )):
+                for i in range(num_workers)
+            ]
+            del texts
+
+            for future in as_completed(futures):
                 # print(f'Merging results from one of the workers in {batch_num}...')
                 word_freq_chunk, base_simple_freq_chunk = future.result()
 
@@ -163,8 +156,7 @@ def main():
                 }
                 del word_freq_chunk, base_simple_freq_chunk
 
-        print(f'Batch processed in {perf_counter() - start_time:.2f} seconds')
-        del chunks
+            print_async(f'Batch processed in {perf_counter() - start_time:.2f} seconds')
 
     # print('Cleaning results...')
     # word_freq = {word: freq for word, freq in word_freq.items() if freq >= 100 and len(word) > 1}
