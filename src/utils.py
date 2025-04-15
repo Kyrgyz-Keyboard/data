@@ -69,6 +69,7 @@ class FileWriter:
     _wait_lock: Lock       # type: ignore
     _pending_tasks: Value  # type: ignore
     _max_size: int = 1_000_000_000  # 1 GB
+    _num_threads: int = 10
 
     @classmethod
     def init(cls):
@@ -94,28 +95,42 @@ class FileWriter:
         cls._pending_tasks = pending_tasks
 
     @classmethod
-    def _write_task(cls, args, kwargs, total_size):
-        path, data, *args = args
-        # print_async('[FileWriter] Writing to', path)
-        try:
-            write_file(path, data, *args, **kwargs)
-        except Exception as e:
-            print_async(f'[FileWriter] Error writing to {path}: {e}')
-        finally:
-            with total_size.get_lock():
-                total_size.value -= len(data)
-        # print_async('[FileWriter] Finished writing to', path)
-
-    @classmethod
     def _writer_worker(cls, queue, stop_event, total_size):
-        with ThreadPoolExecutor(max_workers=10) as executor:
+        active_writes_lock = Lock()
+        active_writes_to: set[str] = set()
+
+        def _write_task(args, kwargs, total_size):
+            path, data, *args = args
+
+            while True:
+                with active_writes_lock:
+                    need_wait = path in active_writes_to
+                if not need_wait:
+                    break
+                sleep(1)
+
+            with active_writes_lock:
+                active_writes_to.add(path)
+
+            # print_async('[FileWriter] Writing to', path)
+            try:
+                write_file(path, data, *args, **kwargs)
+            except Exception as e:
+                print_async(f'[FileWriter] Error writing to {path}: {e}')
+            finally:
+                active_writes_to.remove(path)
+                with total_size.get_lock():
+                    total_size.value -= len(data)
+            # print_async('[FileWriter] Finished writing to', path)
+
+        with ThreadPoolExecutor(max_workers=cls._num_threads) as executor:
             while not queue.empty() or not stop_event.is_set():
                 try:
                     args, kwargs = queue.get(timeout=0.5)
                 except EmptyQueueException:
                     continue
                 # print_async('[FileWriter] Starting task:', args, kwargs)
-                executor.submit(cls._write_task, args, kwargs, total_size)
+                executor.submit(_write_task, args, kwargs, total_size)
 
     @classmethod
     @no_type_check
@@ -129,7 +144,7 @@ class FileWriter:
                 print_async(
                     '[FileWriter] Data queue too large, waiting... '
                     f'({cls._data_size.value} + {data_size} > {cls._max_size}, '
-                    f'{cls._queue.qsize()} tasks in queue, {cls._pending_tasks} pending)'
+                    f'{cls._queue.qsize()} tasks in queue, {cls._pending_tasks.value} pending)'
                 )
                 sleep(1)
 
