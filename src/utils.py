@@ -88,49 +88,51 @@ class FileWriter:
         return (cls._queue, cls._data_size, cls._wait_lock, cls._pending_tasks)
 
     @classmethod
-    def bind_worker(cls, queue, total_size, wait_lock, pending_tasks):
+    def bind_worker(cls, queue, data_size, wait_lock, pending_tasks):
         cls._queue = queue
-        cls._data_size = total_size
+        cls._data_size = data_size
         cls._wait_lock = wait_lock
         cls._pending_tasks = pending_tasks
 
     @classmethod
-    def _writer_worker(cls, queue, stop_event, total_size):
+    def _writer_worker(cls, queue, stop_event, data_size):
         active_writes_lock = Lock()
         active_writes_to: set[str] = set()
 
-        def _write_task(args, kwargs, total_size):
-            path, data, *args = args
-
+        def worker_loop():
             while True:
-                with active_writes_lock:
-                    need_wait = path in active_writes_to
-                if not need_wait:
-                    break
-                sleep(1)
+                try:
+                    args, kwargs = queue.get(timeout=1)
+                except EmptyQueueException:
+                    if stop_event.is_set():
+                        break
+                    continue
 
-            with active_writes_lock:
-                active_writes_to.add(path)
+                path, data, *args = args
 
-            # print_async('[FileWriter] Writing to', path)
-            try:
-                write_file(path, data, *args, **kwargs)
-            except Exception as e:
-                print_async(f'[FileWriter] Error writing to {path}: {e}')
-            finally:
-                active_writes_to.remove(path)
-                with total_size.get_lock():
-                    total_size.value -= len(data)
-            # print_async('[FileWriter] Finished writing to', path)
+                while True:
+                    with active_writes_lock:
+                        if path not in active_writes_to:
+                            active_writes_to.add(path)
+                            break
+                    sleep(1)
+
+                # print_async('[FileWriter] Writing to', path)
+                try:
+                    write_file(path, data, *args, **kwargs)
+                except Exception as e:
+                    print_async(f'[FileWriter] Error writing to {path}: {e}')
+                finally:
+                    with active_writes_lock:
+                        active_writes_to.remove(path)
+                    with data_size.get_lock():
+                        data_size.value -= len(data)
+                # print_async('[FileWriter] Finished writing to', path)
 
         with ThreadPoolExecutor(max_workers=cls._num_threads) as executor:
-            while not queue.empty() or not stop_event.is_set():
-                try:
-                    args, kwargs = queue.get(timeout=0.5)
-                except EmptyQueueException:
-                    continue
-                # print_async('[FileWriter] Starting task:', args, kwargs)
-                executor.submit(_write_task, args, kwargs, total_size)
+            futures = [executor.submit(worker_loop) for _ in range(cls._num_threads)]
+            for f in futures:
+                f.result()
 
     @classmethod
     @no_type_check
@@ -138,18 +140,18 @@ class FileWriter:
         with cls._pending_tasks.get_lock():
             cls._pending_tasks.value += 1
 
-        data_size = len(data)
+        cur_data_size = len(data)
         with cls._wait_lock:
-            while cls._data_size.value and cls._data_size.value + data_size > cls._max_size:
+            while cls._data_size.value and cls._data_size.value + cur_data_size > cls._max_size:
                 print_async(
                     '[FileWriter] Data queue too large, waiting... '
-                    f'({cls._data_size.value} + {data_size} > {cls._max_size}, '
+                    f'({cls._data_size.value} + {cur_data_size} > {cls._max_size}, '
                     f'{cls._queue.qsize()} tasks in queue, {cls._pending_tasks.value} pending)'
                 )
                 sleep(1)
 
             with cls._data_size.get_lock():
-                cls._data_size.value += data_size
+                cls._data_size.value += cur_data_size
 
         cls._queue.put(((path, data, *args), kwargs))
 
