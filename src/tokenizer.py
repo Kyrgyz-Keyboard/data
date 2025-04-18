@@ -34,7 +34,12 @@ class Tokenizer:
     # WORD_PATTERN = re.compile(r'\b[А-Яа-я]+(?:[-–—][А-Яа-я]+)*\b')
     WORD_PATTERN = re.compile(
         r"""
-        [а-яА-Яёңөүa-zA-ZЁҢҮӨ0-9\.\:]+[а-яА-Яёңөүa-zA-ZЁҢҮӨ0-9\.](?:,[0-9]+)?\b
+        (?:
+        # Main pattern
+          [а-яa-zёңөүА-ЯA-ZЁҢҮӨ](?:[а-яa-zёңөүА-ЯA-ZЁҢҮӨ\.\:]*[а-яa-zёңөүА-ЯA-ZЁҢҮӨ])?
+        # Pure numbers + (23:59) + (1.5 / 1,5)
+        | [0-9](?:[0-9\:\.\,]*[0-9])?
+        ) (?=\b|\d)
         """,
         flags=re.VERBOSE
     )
@@ -45,16 +50,18 @@ class Tokenizer:
         r"""
         # Linebreak is always a separator
           \n
-        # Weird symbols are contextual separators
-        | [\|\(\)\[\]\{\}\…\\\/]+
+        # Weird (and not so) symbols are contextual separators
+        | [\!\?\|\(\)\[\]\{\}\…\\\/\•\。\︖\︕\？\！\⁇\⁈\⁉\؟\¿\¡\।\॥\።\⸮]+
         # Colon with anything except digit afterward (to discard 00:00)
         | \:(?=[^0-9])
         # Ellipsis and other instances of multiple dots are always separators
         | \.{2,}
-        # Dot after lowercase that follows with an uppercase letter or wired symbol
+        # Dot after lowercase that follows with an uppercase letter or weired symbol
         | (?<=[a-zа-яёңүө ])\.\s*(?=[A-ZА-ЯЁҢҮӨ]|[^\w\s])
-        # Dot after uppercase that follows with a lowercase letter or wired symbol
+        # Dot after uppercase that follows with a lowercase letter or weired symbol
         | (?<=[A-ZА-ЯЁҢҮӨ ])\.\s*(?=[a-zа-яёңүө]|[^\w\s])
+        # Dot after digit that follows with any letter
+        | (?<=\d)\.\s*(?=[a-zа-яёңүөA-ZА-ЯЁҢҮӨ]|[^\w\s])
         """,
         flags=re.VERBOSE
     )

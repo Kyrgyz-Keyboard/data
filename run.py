@@ -44,7 +44,9 @@ def process_chunk(
 
             for word in sentence:
                 base_simple, _ = suffix_trie.remove_suffix(word)
-                base_apertium = apertium_mapper[word]
+
+                # Word may not be in the mapper, if the mapper is outdated
+                base_apertium = apertium_mapper.get(word, word)
 
                 word_freq[word] += 1
                 base_freq_simple[base_simple] += 1

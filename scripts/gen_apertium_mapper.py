@@ -1,5 +1,7 @@
 # Runs only on Linux/MacOS
 
+from typing import TypeVar, Iterator
+
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import sys
 
@@ -14,9 +16,15 @@ mkpath = PathMagic(__file__)
 from src.utils import write_file, print_async
 
 
-def chunkify(lst, n):
-    k, m = divmod(len(lst), n)
-    return [lst[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(n)]
+T = TypeVar('T')
+
+
+def chunkify(array: list[T], n: int) -> Iterator[list[T]]:
+    k, m = divmod(len(array), n)
+    yield from (
+        array[i * k + min(i, m):(i + 1) * k + min(i + 1, m)]
+        for i in range(n)
+    )
 
 
 def process_chunk(words_chunk: list[str], chunk_num: int) -> list[list[str]]:
