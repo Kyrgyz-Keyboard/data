@@ -1,8 +1,9 @@
 results/**/*.*
 
-# Python cache (+ mypy)
+# Python cache (+ mypy and pytest)
 __pycache__/
 .mypy_cache/
+.pytest_cache/
 
 # Python environment
 .venv/
