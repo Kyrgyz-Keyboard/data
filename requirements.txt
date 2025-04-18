@@ -1,3 +1,4 @@
+jstyleson~=0.0.2
 requests~=2.32.3
 datasets~=3.5.0
 peewee~=3.17.9

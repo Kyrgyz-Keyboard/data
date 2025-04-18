@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   lint:
-    name: Lint & Test Python code
+    name: Lint Python code
     runs-on: ubuntu-latest
 
     steps:
@@ -29,7 +29,9 @@ jobs:
           cache-dependency-path: .github/lint.requirements.txt
 
       - name: Install dependencies
-        run: pip install -r ".github/lint.requirements.txt"
+        run: |
+          pip install -r ".github/lint.requirements.txt"
+          pip install -r "requirements.txt"
 
       - name: Run Flake8
         run: flake8 --show-source --statistics
@@ -38,4 +40,4 @@ jobs:
         run: mypy . --config-file tox.ini --install-types --non-interactive
 
       - name: Run pytest
-        run: pytest
+        run: python3 -m pytest -vv
