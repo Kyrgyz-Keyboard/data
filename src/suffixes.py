@@ -1,6 +1,8 @@
 from functools import cache
 import sys
 
+import apertium
+
 if __name__ == '__main__':
     sys.path.append('../')
 
@@ -124,89 +126,92 @@ class SuffixTrie:
         return word[:longest_index], word[longest_index:]
 
 
-class ApertiumWrapper:
-    def __init__(self):
-        pass
+# class ApertiumWrapper:
+#     def __init__(self):
+#         self.analyzer = apertium.Analyzer('kir')
 
-    @cache  # noqa
-    def remove_suffix(self, word: str):
-        return ''
+#     @cache  # noqa
+#     def remove_suffix(self, word: str):
+#         return min(
+#             reading[0].baseform.lstrip('*')
+#             for reading in self.analyzer.analyze(word)[0].readings
+#         )
 
 
-def _convert_apertium():
-    from collections import defaultdict
-    import apertium
+# def _convert_apertium():
+#     from collections import defaultdict
+#     import apertium
 
-    class ApertiumWrapper:
-        def __init__(self):
-            self.analyzer = apertium.Analyzer('kir')
+#     class ApertiumWrapper:
+#         def __init__(self):
+#             self.analyzer = apertium.Analyzer('kir')
 
-        @cache  # noqa
-        def remove_suffix(self, word: str):
-            return min(
-                reading[0].baseform.lstrip('*')
-                for reading in self.analyzer.analyze(word)[0].readings
-            )
+#         @cache  # noqa
+#         def remove_suffix(self, word: str):
+#             return min(
+#                 reading[0].baseform.lstrip('*')
+#                 for reading in self.analyzer.analyze(word)[0].readings
+#             )
 
-    apertium_analyzer = ApertiumWrapper()
-    freq_cap = 3000
+#     apertium_analyzer = ApertiumWrapper()
+#     freq_cap = 3000
 
-    # ------------
+#     # ------------
 
-    with open(mkpath('../results/base_simple_freq.txt'), 'r', encoding='utf-8') as file:
-        base_simple_freq = {}
-        for line in filter(None, file):
-            base, freq = line.split(' ')
-            if int(freq) < freq_cap:
-                break
-            base_simple_freq[base] = int(freq)
+#     with open(mkpath('../results/base_simple_freq.txt'), 'r', encoding='utf-8') as file:
+#         base_simple_freq = {}
+#         for line in filter(None, file):
+#             base, freq = line.split(' ')
+#             if int(freq) < freq_cap:
+#                 break
+#             base_simple_freq[base] = int(freq)
 
-    base_simple_freq_sorted = sorted(base_simple_freq.items(), key=lambda x: x[1], reverse=True)
-    del base_simple_freq
+#     base_simple_freq_sorted = sorted(base_simple_freq.items(), key=lambda x: x[1], reverse=True)
+#     del base_simple_freq
 
-    write_file(
-        '../results/tmp.base_simple_freq.txt',
-        '\n'.join(f'{base} {freq}' for base, freq in base_simple_freq_sorted)
-    )
+#     write_file(
+#         '../results/tmp.base_simple_freq.txt',
+#         '\n'.join(f'{base} {freq}' for base, freq in base_simple_freq_sorted)
+#     )
 
-    # ------------
+#     # ------------
 
-    with open(mkpath('../results/word_freq.txt'), 'r', encoding='utf-8') as file:
-        word_freq = {}
-        for line in filter(None, file):
-            word, freq = line.split(' ')
-            if int(freq) < freq_cap:
-                break
-            word_freq[word] = int(freq)
+#     with open(mkpath('../results/word_freq.txt'), 'r', encoding='utf-8') as file:
+#         word_freq = {}
+#         for line in filter(None, file):
+#             word, freq = line.split(' ')
+#             if int(freq) < freq_cap:
+#                 break
+#             word_freq[word] = int(freq)
 
-    word_freq_sorted = sorted(word_freq.items(), key=lambda x: x[1], reverse=True)
-    del word_freq
+#     word_freq_sorted = sorted(word_freq.items(), key=lambda x: x[1], reverse=True)
+#     del word_freq
 
-    write_file(
-        '../results/tmp.word_freq.txt',
-        '\n'.join(f'{word} {freq}' for word, freq in word_freq_sorted)
-    )
+#     write_file(
+#         '../results/tmp.word_freq.txt',
+#         '\n'.join(f'{word} {freq}' for word, freq in word_freq_sorted)
+#     )
 
-    # ------------
+#     # ------------
 
-    with open(mkpath('../results/word_freq.txt'), 'r', encoding='utf-8') as file:
-        base_apertium_freq: dict[str, int] = defaultdict(int)
-        for i, line in enumerate(filter(None, file), 1):
-            word, freq = line.split(' ')
-            if int(freq) < freq_cap:
-                break
-            base = apertium_analyzer.remove_suffix(word)
-            base_apertium_freq[base] += int(freq)
-            if i % 100 == 0:
-                print(i, int(freq), word, base)
+#     with open(mkpath('../results/word_freq.txt'), 'r', encoding='utf-8') as file:
+#         base_apertium_freq: dict[str, int] = defaultdict(int)
+#         for i, line in enumerate(filter(None, file), 1):
+#             word, freq = line.split(' ')
+#             if int(freq) < freq_cap:
+#                 break
+#             base = apertium_analyzer.remove_suffix(word)
+#             base_apertium_freq[base] += int(freq)
+#             if i % 100 == 0:
+#                 print(i, int(freq), word, base)
 
-    base_apertium_freq_sorted = sorted(base_apertium_freq.items(), key=lambda x: x[1], reverse=True)
-    del base_apertium_freq
+#     base_apertium_freq_sorted = sorted(base_apertium_freq.items(), key=lambda x: x[1], reverse=True)
+#     del base_apertium_freq
 
-    write_file(
-        '../results/tmp.base_apertium_freq.txt',
-        '\n'.join(f'{base} {freq}' for base, freq in base_apertium_freq_sorted)
-    )
+#     write_file(
+#         '../results/tmp.base_apertium_freq.txt',
+#         '\n'.join(f'{base} {freq}' for base, freq in base_apertium_freq_sorted)
+#     )
 
 
 if __name__ == '__main__':
@@ -218,4 +223,4 @@ if __name__ == '__main__':
     print(apertium_analyzer.remove_suffix('китептеримдин'))
     print(apertium_analyzer.remove_suffix('кыргызча'))
 
-    _convert_apertium()
+    # _convert_apertium()
