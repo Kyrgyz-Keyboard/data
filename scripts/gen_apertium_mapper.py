@@ -84,11 +84,6 @@ def create_apertium_mapper():
 
     results.sort(key=lambda x: words_indexed[x[0]])
 
-    # Fix the base for 'жана' to be 'жана'
-    for item in results:
-        if item[0].lower() == 'жана':
-            item[1] = item[0]
-
     for word, base in results:
         apertium_mapper[word] = base
 
@@ -103,6 +98,8 @@ def create_apertium_mapper():
     print(f'Removed {old_size - len(apertium_mapper)} words from the mapper')
 
     assert len(apertium_mapper) == len(words_indexed)
+
+    apertium_mapper['жана'] = 'жана'
 
     write_file(
         mkpath('../results/apertium_mapper.txt'),
