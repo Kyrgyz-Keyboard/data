@@ -27,12 +27,15 @@ def chunkify(array: list[T], n: int) -> Iterator[list[T]]:
     )
 
 
-def process_chunk(words_chunk: list[str], chunk_num: int) -> list[list[str]]:
+def process_chunk(words_chunk: list[str], chunk_num: int, apertium_mapper: dict[str, str]) -> list[list[str]]:
     analyzer = apertium.Analyzer('kir')
 
     results = []
 
     for i, word in enumerate(words_chunk, 1):
+        if word in apertium_mapper:
+            continue
+
         base = min(
             reading[0].baseform.lstrip('*')
             for reading in analyzer.analyze(word)[0].readings
@@ -47,19 +50,33 @@ def process_chunk(words_chunk: list[str], chunk_num: int) -> list[list[str]]:
 
 def create_apertium_mapper():
     with open(mkpath('../results/word_freq.txt'), 'r', encoding='utf-8') as file:
-        words = [line.split(' ')[0].strip() for line in filter(None, file)]
-        words_indexed = {word: i for i, word in enumerate(words)}
+        words_indexed = {
+            word: i
+            for i, word in enumerate(
+                line.split(' ', 1)[0].strip()
+                for line in filter(None, file)
+            )
+        }
+
+    with open(mkpath('../results/apertium_mapper.txt'), 'r', encoding='utf-8') as file:
+        apertium_mapper: dict[str, str] = dict(
+            list(map(str.strip, line.split(' ', 1)))
+            for line in filter(None, file)
+        )
+
+    to_process = list(set(words_indexed.keys()) - set(apertium_mapper.keys()))
 
     num_workers = 4
-    chunks = chunkify(words, num_workers)
+    chunks = chunkify(to_process, num_workers)
 
-    print(f'Processing {len(words)} words in {num_workers} parallel chunks...')
+    print(f'Processing {len(to_process)} words in {num_workers} parallel chunks...')
 
     results: list[list[str]] = []
 
     with ProcessPoolExecutor(max_workers=num_workers) as executor:
         for i, future in enumerate(as_completed(
-            executor.submit(process_chunk, chunk, chunk_num) for chunk_num, chunk in enumerate(chunks, 1)
+            executor.submit(process_chunk, chunk, chunk_num, apertium_mapper)
+            for chunk_num, chunk in enumerate(chunks, 1)
         ), 1):
             chunk_result = future.result()
             results.extend(chunk_result)
@@ -72,13 +89,30 @@ def create_apertium_mapper():
         if item[0].lower() == 'жана':
             item[1] = item[0]
 
+    for word, base in results:
+        apertium_mapper[word] = base
+
+    print(f'Added {len(results)} new words to the mapper')
+
+    old_size = len(apertium_mapper)
+
+    for word in list(apertium_mapper):
+        if word not in words_indexed:
+            del apertium_mapper[word]
+
+    print(f'Removed {old_size - len(apertium_mapper)} words from the mapper')
+
+    assert len(apertium_mapper) == len(words_indexed)
+
     write_file(
         mkpath('../results/apertium_mapper.txt'),
-        '\n'.join(f'{word} {base}' for word, base in results)
+        '\n'.join(f'{word} {base}' for word, base in apertium_mapper.items())
     )
 
 
 if __name__ == '__main__':
-    apertium_analyzer = apertium.Analyzer('kir')
+    # apertium_analyzer = apertium.Analyzer('kir')
 
-    print(apertium_analyzer.analyze('эларалык'))
+    # print(apertium_analyzer.analyze('эларалык'))
+
+    create_apertium_mapper()
