@@ -7,7 +7,7 @@ import os
 from datasets import load_dataset
 
 from src.utils import print_async, FileWriter, empty_file
-from src.suffixes import SuffixTrie, ApertiumWrapper
+from src.suffixes import SuffixTrie, ApertiumMapper, get_appertium_mapper
 from src.tokenizer import Tokenizer
 
 
@@ -22,7 +22,7 @@ def process_chunk(
     worker_num: int,
     texts: tuple[tuple[int, str], ...],
     suffix_trie: SuffixTrie,
-    apertium_analyzer: ApertiumWrapper
+    apertium_mapper: ApertiumMapper
 ):
     print_async(f'Worker {batch_num}_{worker_num} started processing {len(texts)} texts')
 
@@ -44,7 +44,7 @@ def process_chunk(
 
             for word in sentence:
                 base_simple, _ = suffix_trie.remove_suffix(word)
-                base_apertium = apertium_analyzer.remove_suffix(word)
+                base_apertium = apertium_mapper[word]
 
                 word_freq[word] += 1
                 base_freq_simple[base_simple] += 1
@@ -93,7 +93,7 @@ def process_chunk(
 def main():
     bind_args = FileWriter.init()
     suffix_trie = SuffixTrie()
-    apertium_analyzer = ApertiumWrapper()
+    apertium_mapper = get_appertium_mapper()
 
     empty_file('results/sentences.txt')
     empty_file('results/sentences_of_bases_simple.txt')
@@ -142,7 +142,7 @@ def main():
                         for j, text in enumerate(texts[i * chunk_size:(i + 1) * chunk_size])
                     ),
                     suffix_trie,
-                    apertium_analyzer
+                    apertium_mapper
                 )
                 for i in range(num_workers)
             ]
