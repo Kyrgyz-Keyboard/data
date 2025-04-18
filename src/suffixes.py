@@ -131,9 +131,10 @@ def get_appertium_mapper() -> ApertiumMapper:
     mapper = {}
 
     with open(mkpath('../results/apertium_mapper.txt'), 'r', encoding='utf-8') as file:
-        for line in filter(None, file):
-            word, base = map(str.strip, line.split(' ', 1))
-            mapper[word] = ''.join(base)
+        for line in map(str.strip, filter(None, file)):
+            if ' ' in line:
+                word, base = map(str.strip, line.split(' '))
+                mapper[word] = base
 
     return mapper
 
