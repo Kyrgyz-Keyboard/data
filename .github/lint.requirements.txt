@@ -9,3 +9,5 @@ flake8-simplify~=0.21.0
 pep8-naming~=0.14.1
 
 mypy~=1.15.0
+
+pytest~=8.3.5

@@ -1,1 +1,1 @@
-cls && flake8 && mypy . --config-file tox.ini --install-types --non-interactive
+cls && flake8 && mypy . --config-file tox.ini --install-types --non-interactive && pytest

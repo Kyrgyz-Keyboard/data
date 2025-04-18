@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   lint:
-    name: Lint Python code
+    name: Lint & Test Python code
     runs-on: ubuntu-latest
 
     steps:
@@ -36,3 +36,6 @@ jobs:
 
       - name: Run mypy
         run: mypy . --config-file tox.ini --install-types --non-interactive
+
+      - name: Run pytest
+        run: pytest
