@@ -99,7 +99,8 @@ def main():
     apertium_mapper = get_appertium_mapper()
 
     empty_file('results/sentences.txt')
-    empty_file('results/sentences_of_bases_simple.txt')
+    # empty_file('results/sentences_of_bases_simple.txt')
+    empty_file('results/sentences_of_bases_apertium.txt')
 
     print('Loading dataset...')
     dataset = load_dataset(
