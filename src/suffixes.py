@@ -1,5 +1,6 @@
 from functools import cache
 import sys
+import os
 
 if __name__ == '__main__':
     sys.path.append('../')
@@ -128,7 +129,15 @@ ApertiumMapper = dict[str, str]
 
 
 def get_appertium_mapper() -> ApertiumMapper:
-    mapper = {}
+    mapper: ApertiumMapper = {}
+
+    if not os.path.isfile(mkpath('../results/apertium_mapper.txt')):
+        print(
+            '[Apertium] Apertium mapper file not found. '
+            'Bases will be equal to words. '
+            'Please generate the file using `/scripts/apertium_mapper.py` after the program finishes.'
+        )
+        return mapper
 
     with open(mkpath('../results/apertium_mapper.txt'), 'r', encoding='utf-8') as file:
         for line in map(str.strip, filter(None, file)):
