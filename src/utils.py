@@ -52,8 +52,8 @@ def empty_file(path: str):
     path = mkpath(path)
     os.makedirs(os.path.dirname(path), exist_ok=True)
 
-    with open(path, 'w', encoding='utf-8') as file:
-        file.write('')
+    with open(path, 'w', encoding='utf-8'):
+        pass
 
 
 def print_async(*args, **kwargs):
