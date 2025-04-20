@@ -1,16 +1,21 @@
-# Runs only on Linux/MacOS
+# Runs only on Linux/MacOS. Use WSL on Windows
+
+# Apertium should be installed separately.
+# TODO: create instructions for installation and `requirements.txt`
+
 
 from typing import TypeVar, Iterator
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import sys
+import os
 
 import apertium
 
 if __name__ == '__main__':
     sys.path.append('../')
 
-from src.utils import PathMagic
+from src.utils import PathMagic, empty_file
 mkpath = PathMagic(__file__)
 
 from src.utils import write_file, print_async
@@ -53,6 +58,13 @@ def process_chunk(
 
 
 def create_apertium_mapper():
+    if not os.path.isfile(mkpath('../results/word_freq.txt')):
+        print(
+            '[Apertium] Word frequency file not found. '
+            'Please run the main script (`/run.py`) first.'
+        )
+        return
+
     with open(mkpath('../results/word_freq.txt'), 'r', encoding='utf-8') as file:
         words_indexed = {
             word: i
@@ -61,6 +73,9 @@ def create_apertium_mapper():
                 for line in filter(None, file)
             )
         }
+
+    if not os.path.isfile(mkpath('../results/apertium_mapper.txt')):
+        empty_file(mkpath('../results/apertium_mapper.txt'))
 
     with open(mkpath('../results/apertium_mapper.txt'), 'r', encoding='utf-8') as file:
         apertium_mapper: dict[str, str | None] = {}
