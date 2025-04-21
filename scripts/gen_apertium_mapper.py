@@ -69,7 +69,7 @@ def create_apertium_mapper():
         words_indexed = {
             word: i
             for i, word in enumerate(
-                line.split(' ', 1)[0].strip()
+                line.split()[0].strip()
                 for line in filter(None, file)
             )
         }
