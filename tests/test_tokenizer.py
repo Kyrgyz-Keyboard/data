@@ -36,4 +36,9 @@ def test_tokenizer_case(case_name):
 
     output = list(tokenizer.process_text(text))
 
-    assert output == expected
+    assert output == expected, f'\n{output}\n\n{expected}'
+
+
+if __name__ == '__main__':
+    for case_name in get_test_cases():
+        test_tokenizer_case(case_name)
