@@ -34,22 +34,20 @@ def chunkify(array: list[T], n: int) -> Iterator[list[T]]:
 
 def process_chunk(
     words_chunk: list[str],
-    chunk_num: int,
-    apertium_mapper: dict[str, str | None]
+    chunk_num: int
 ) -> list[tuple[str, str | None]]:
 
     analyzer = apertium.Analyzer('kir')
     results = []
 
     for i, word in enumerate(words_chunk, 1):
-        if word not in apertium_mapper:
-            bases = []
-            for reading in analyzer.analyze(word)[0].readings:
-                cur_base = reading[0].baseform.replace(' ', '')
-                if cur_base[0] != '*':
-                    bases.append(cur_base)
+        bases = []
+        for reading in analyzer.analyze(word)[0].readings:
+            cur_base = reading[0].baseform.replace(' ', '')
+            if cur_base[0] != '*':
+                bases.append(cur_base)
 
-            results.append((word, min(bases) if bases else None))
+        results.append((word, min(bases) if bases else None))
 
         if i % 1000 == 0:
             print_async(f'Processed {i}/{len(words_chunk)} words in chunk {chunk_num}')
@@ -91,6 +89,7 @@ def create_apertium_mapper():
 
     for word in list(apertium_mapper):
         if word not in words_indexed:
+            # print('Deleting', word)
             del apertium_mapper[word]
 
     print(f'Removed {old_size - len(apertium_mapper)} words from the mapper')
@@ -106,7 +105,7 @@ def create_apertium_mapper():
 
     with ProcessPoolExecutor(max_workers=num_workers) as executor:
         for i, future in enumerate(as_completed(
-            executor.submit(process_chunk, chunk, chunk_num, apertium_mapper)
+            executor.submit(process_chunk, chunk, chunk_num)
             for chunk_num, chunk in enumerate(chunks, 1)
         ), 1):
             chunk_result = future.result()
