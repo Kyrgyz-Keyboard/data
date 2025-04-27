@@ -7,6 +7,8 @@
 from typing import TypeVar, Iterator
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from itertools import batched
+from math import ceil
 import sys
 import os
 
@@ -24,6 +26,21 @@ from src.utils import write_file, print_async
 T = TypeVar('T')
 
 
+KYRGYZ_WHITELIST_WORDS = {
+    # Conjunctions
+    'жана', 'же', 'бирок', 'анткени', 'ошондуктан', 'себеби', 'болбосо', 'менен',
+
+    # Prepositions and postpositions
+    'үчүн', 'чейин', 'кийин', 'үстүндө', 'ичинде', 'сыртында', 'алдында', 'артында',
+
+    # Particles and introductory words
+    'эле', 'да', 'де', 'дагы', 'гана', 'го', 'даана', 'балким', 'эми', 'мурда',
+
+    # Pronouns
+    'бул', 'ал', 'мен', 'сен', 'сиз', 'биз', 'силер', 'алар',
+}
+
+
 def chunkify(array: list[T], n: int) -> Iterator[list[T]]:
     k, m = divmod(len(array), n)
     yield from (
@@ -33,7 +50,7 @@ def chunkify(array: list[T], n: int) -> Iterator[list[T]]:
 
 
 def process_chunk(
-    words_chunk: list[str],
+    words_chunk: list[str] | tuple[str, ...],
     chunk_num: int
 ) -> list[tuple[str, str | None]]:
 
@@ -87,17 +104,18 @@ def create_apertium_mapper():
 
     old_size = len(apertium_mapper)
 
-    for word in list(apertium_mapper):
-        if word not in words_indexed:
-            # print('Deleting', word)
-            del apertium_mapper[word]
+    apertium_mapper = {
+        word: base
+        for word, base in apertium_mapper.items()
+        if word in words_indexed
+    }
 
     print(f'Removed {old_size - len(apertium_mapper)} words from the mapper')
 
-    to_process = list(set(words_indexed.keys()) - set(apertium_mapper.keys()))
+    to_process = list(set(words_indexed.keys()) - set(apertium_mapper.keys()) - KYRGYZ_WHITELIST_WORDS)
 
-    num_workers = 4
-    chunks = chunkify(to_process, num_workers)
+    num_workers = os.cpu_count() or 4
+    chunk_size = ceil(len(to_process) / num_workers)
 
     print(f'Processing {len(to_process)} words in {num_workers} parallel chunks...')
 
@@ -106,11 +124,10 @@ def create_apertium_mapper():
     with ProcessPoolExecutor(max_workers=num_workers) as executor:
         for i, future in enumerate(as_completed(
             executor.submit(process_chunk, chunk, chunk_num)
-            for chunk_num, chunk in enumerate(chunks, 1)
+            for chunk_num, chunk in enumerate(batched(to_process, chunk_size or 1), 1)
         ), 1):
             chunk_result = future.result()
-            for word, base_opt in chunk_result:
-                apertium_mapper[word] = base_opt
+            apertium_mapper.update(chunk_result)
             added_count += len(chunk_result)
             print(f'Processed chunk {i} ({len(chunk_result)} words)')
 
@@ -118,12 +135,14 @@ def create_apertium_mapper():
 
     assert len(apertium_mapper) == len(words_indexed)
 
-    apertium_mapper['жана'] = 'жана'
+    for word in KYRGYZ_WHITELIST_WORDS:
+        if word in apertium_mapper:
+            apertium_mapper[word] = word
 
     write_file(
         mkpath('../results/apertium_mapper.txt'),
         '\n'.join(
-            (word if base is None else f'{word} {base}')
+            (word if base is None or base == word else f'{word} {base}')
             for word, base in sorted(apertium_mapper.items(), key=lambda x: words_indexed[x[0]])
         )
     )

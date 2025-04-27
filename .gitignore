@@ -13,3 +13,6 @@ __pycache__/
 /.idea/
 
 !.gitkeep
+
+# Save Apertium mapper so newcomers don't have to run the program twice
+# !/results/apertium_mapper.txt
