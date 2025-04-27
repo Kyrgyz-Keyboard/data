@@ -143,6 +143,8 @@ def get_appertium_mapper() -> ApertiumMapper:
         for line in map(str.strip, filter(None, file)):
             if ' ' in line:
                 word, base = map(str.strip, line.split(' ', 1))
+                if word == base:
+                    continue
                 mapper[word] = base
 
     return mapper
@@ -154,5 +156,6 @@ if __name__ == '__main__':
     print(suffix_trie.remove_suffix('кыргызча'))
 
     apertium_mapper = get_appertium_mapper()
+    print(len(apertium_mapper))
     print(apertium_mapper['түшүндүрүлүп'])
     print(apertium_mapper['кыргызча'])
