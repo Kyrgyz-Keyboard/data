@@ -93,8 +93,14 @@ def predict_letteer(trie: TrieNode, word: str) -> list[tuple[int, str]]:
 if __name__ == '__main__':
     trie = build_trie()
 
-    print('Top 5 words to complete:')
+    # print('Top 5 words to complete:')
     print(predict_word(trie, 'Рес'))
 
-    print('Top 5 letters to complete:')
+    # print('Top 5 words to complete:')
+    print(predict_word(trie, 'рес'))
+
+    # print('Top 5 letters to complete:')
     print(predict_letteer(trie, 'Рес'))
+
+    # print('Top 5 letters to complete:')
+    print(predict_letteer(trie, 'рес'))
