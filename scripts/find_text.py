@@ -40,4 +40,4 @@ def find_word(word: str):
 
 
 if __name__ == '__main__':
-    find_word('мындан бир нечеге')
+    find_word('медициналыксанитардык')
