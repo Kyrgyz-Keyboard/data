@@ -114,6 +114,8 @@ def create_apertium_mapper():
 
     to_process = list(set(words_indexed.keys()) - set(apertium_mapper.keys()) - KYRGYZ_WHITELIST_WORDS)
 
+    # to_process = to_process[:500_000]
+
     num_workers = os.cpu_count() or 4
     chunk_size = ceil(len(to_process) / num_workers)
 
@@ -149,8 +151,9 @@ def create_apertium_mapper():
 
 
 if __name__ == '__main__':
-    # apertium_analyzer = apertium.Analyzer('kir')
+    apertium_analyzer = apertium.Analyzer('kir')
 
-    # print(apertium_analyzer.analyze('эларалык'))
+    print(apertium_analyzer.analyze('англисчени'))
+    print(apertium_analyzer.analyze('англисчени')[0].readings)
 
-    create_apertium_mapper()
+    # create_apertium_mapper()
