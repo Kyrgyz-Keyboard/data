@@ -14,8 +14,6 @@ from src.tokenizer import Tokenizer
 BATCH_SIZE = 100_000
 # os.environ['HF_HUB_OFFLINE'] = '1'
 
-tokenizer = Tokenizer()
-
 
 def process_chunk(
     batch_num: int,
@@ -34,9 +32,8 @@ def process_chunk(
     for _, text in texts:
         # FileWriter.write_file(f'results/texts/{batch_num}_{worker_num}_{text_index}.txt', text)
 
-        for sentence in tokenizer.process_text(text):
-            sentences.append([])
-            sentences_of_bases_apertium.append([])
+        for sentence in Tokenizer.process_text(text):
+            sentence_of_bases_apertium = []
 
             for word in sentence:
                 # Word may not be in the mapper, if the mapper is outdated
@@ -45,8 +42,11 @@ def process_chunk(
                 word_freq[word] += 1
                 base_freq_apertium[base_apertium] += 1
 
-                sentences[-1].append(word)
-                sentences_of_bases_apertium[-1].append(base_apertium)
+                sentence_of_bases_apertium.append(base_apertium)
+
+            if len(sentence) > 1:
+                sentences.append(sentence)
+                sentences_of_bases_apertium.append(sentence_of_bases_apertium)
 
     # print_async(f'Worker {batch_num}_{worker_num} is storing sentences...')
     FileWriter.write_file(

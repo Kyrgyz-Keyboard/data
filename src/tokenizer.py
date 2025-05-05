@@ -1,10 +1,11 @@
 from typing import Generator
 
-import regex
 import sys
 
 if __name__ == '__main__':
     sys.path.append('../')
+
+import regex
 
 from src.utils import PathMagic
 mkpath = PathMagic(__file__)
@@ -77,21 +78,17 @@ class Tokenizer:
         flags=regex.VERBOSE
     )
 
-    def process_text(self, text: str) -> Generator[list[str]]:
-        for sentence in filter(None, map(str.strip, Tokenizer.SENTENCE_SPLIT_PATERN.split(
-            text.translate(Tokenizer.TRANSLATION_TABLE)
+    @classmethod
+    def process_text(cls, text: str) -> Generator[list[str]]:
+        for sentence in filter(None, map(str.strip, cls.SENTENCE_SPLIT_PATERN.split(
+            text.translate(cls.TRANSLATION_TABLE)
         ))):
-            words = []
-            for word in map(regex.Match.group, Tokenizer.WORD_PATTERN.finditer(sentence)):
-                if len(word) > 1 or word.isdigit():
-                    words.append(word)
+            words = list(map(regex.Match.group, cls.WORD_PATTERN.finditer(sentence)))
             if words:
                 yield words
 
 
 if __name__ == '__main__':
-    tokenizer = Tokenizer()
-
     # print(tokenizer.SENTENCE_SPLIT_PATERN.pattern)
     # print(tokenizer.WORD_PATTERN.pattern)
 
@@ -101,7 +98,7 @@ if __name__ == '__main__':
             text = file.read()
             # print(text)
 
-            for sentence in tokenizer.process_text(text):
+            for sentence in Tokenizer.process_text(text):
                 print(sentence)
                 for word in sentence:
                     assert ' ' not in word, filename
