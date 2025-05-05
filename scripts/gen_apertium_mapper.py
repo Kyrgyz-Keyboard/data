@@ -155,7 +155,7 @@ def create_apertium_mapper():
 if __name__ == '__main__':
     apertium_analyzer = apertium.Analyzer('kir')
 
-    print(apertium_analyzer.analyze('англисчени'))
-    print(apertium_analyzer.analyze('англисчени')[0].readings)
+    # print(apertium_analyzer.analyze('англисчени'))
+    # print(apertium_analyzer.analyze('англисчени')[0].readings)
 
-    # create_apertium_mapper()
+    create_apertium_mapper()
