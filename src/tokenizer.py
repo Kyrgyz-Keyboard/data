@@ -53,6 +53,7 @@ class Tokenizer:
             (?=\b|[^0-9])
         )
         """,
+        # TODO: [0-9](?:[0-9\:\.\,]?[0-9])*
         flags=regex.VERBOSE
     )
 
