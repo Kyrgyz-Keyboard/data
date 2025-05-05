@@ -61,10 +61,12 @@ def process_chunk(
         bases = []
         for reading in analyzer.analyze(word)[0].readings:
             cur_base = reading[0].baseform.replace(' ', '')
+            if '/' in cur_base or '\\' in cur_base:
+                continue
             if cur_base[0] != '*':
                 bases.append(cur_base)
 
-        results.append((word, min(bases) if bases else None))
+        results.append((word, min(bases, key=lambda s: (len(s), s)) if bases else None))
 
         if i % 1000 == 0:
             print_async(f'Processed {i}/{len(words_chunk)} words in chunk {chunk_num}')
