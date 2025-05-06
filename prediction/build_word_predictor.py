@@ -1,4 +1,4 @@
-from collections import deque, defaultdict, Counter
+from collections import deque
 from time import perf_counter
 import math
 import sys
@@ -10,12 +10,11 @@ if __name__ == '__main__':
 from src.utils import PathMagic
 mkpath = PathMagic(__file__)
 
-from prediction.trie import dump_file as dump_trie_file
+from prediction.trie import LAYERS, Trie
 
 
-LAYERS = [None, 30, 15]
-
-LOG_EVERY_N_BYTES = 30 * 1024 * 1024  # 30 MB
+LOG_EVERY_N_BYTES = 100 * 1024 * 1024  # 100 MB
+# LOG_EVERY_N_BYTES = 30 * 1024 * 1024  # 30 MB
 # LOG_EVERY_N_BYTES = 1024  # 1 KB
 
 
@@ -44,7 +43,7 @@ def build_trie():
     file_size = os.path.getsize(mkpath('../results/sentences.txt'))
     print(f'File size: {size_to_str(file_size)}')
 
-    layer1 = defaultdict(Counter)  # type: ignore
+    trie = Trie()
 
     total_read_size = 0
     next_log = LOG_EVERY_N_BYTES
@@ -52,7 +51,7 @@ def build_trie():
 
     with open(mkpath('../results/sentences.txt'), 'r', encoding='utf-8') as file:
         for sentence in map(str.strip, file):
-            word_window: deque[str] = deque(maxlen=1)
+            word_window: deque[str] = deque(maxlen=len(LAYERS))
 
             # if len(sentence.split(' ')) < 10:
             #     continue
@@ -65,10 +64,12 @@ def build_trie():
                     word_window.clear()
                     continue
 
-                if word_window:
-                    layer1[word_window[-1]][word] += 1
-
                 word_window.append(word)
+
+                if word_window:
+                    trie.add(word_window)
+
+                word_window.popleft()
 
             if total_read_size >= next_log:
                 print(
@@ -79,11 +80,7 @@ def build_trie():
 
                 break
 
-    for key, value in layer1.items():
-        layer1[key] = dict(sorted(value.items(), key=lambda x: x[1], reverse=True)[:LAYERS[1]])
-
-    dump_trie_file(layer1, mkpath('../results/trie.json'))
-    # print(layer1)
+    trie.dump_file(mkpath('../results/trie.bin'))
 
 
 if __name__ == '__main__':
