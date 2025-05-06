@@ -67,9 +67,8 @@ def build_trie():
                 word_window.append(word)
 
                 if word_window:
+                    # print('Adding', word_window)
                     trie.add(word_window)
-
-                word_window.popleft()
 
             if total_read_size >= next_log:
                 print(
