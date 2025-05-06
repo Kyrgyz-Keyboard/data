@@ -1,3 +1,4 @@
+from collections import defaultdict
 from collections import deque
 from time import perf_counter
 import math
@@ -13,9 +14,12 @@ mkpath = PathMagic(__file__)
 from prediction.trie import LAYERS, Trie
 
 
-LOG_EVERY_N_BYTES = 100 * 1024 * 1024  # 100 MB
-# LOG_EVERY_N_BYTES = 30 * 1024 * 1024  # 30 MB
-# LOG_EVERY_N_BYTES = 1024  # 1 KB
+FINISH_AT_N_BYTES = 500 * 1024 * 1024  # 500 MB
+# FINISH_AT_N_BYTES = 100 * 1024 * 1024  # 100 MB
+# FINISH_AT_N_BYTES = 30 * 1024 * 1024  # 100 MB
+# FINISH_AT_N_BYTES = 1024  # 1 KB
+
+LOG_EVERY_N_BYTES = 10 * 1024 * 1024  # 10 MB
 
 
 def size_to_str(size_bytes: int) -> str:
@@ -31,11 +35,12 @@ def size_to_str(size_bytes: int) -> str:
 def build_trie():
     print('Constructing words list...')
     word_size = {}
-    word_freq = {}
+    word_freq: dict[str, int] = defaultdict(int)
     with open(mkpath('../results/word_freq.txt'), 'r', encoding='utf-8') as file:
         for line in map(str.strip, filter(None, file)):
             word, freq = line.split()
-            word_freq[word] = int(freq)
+            word = word.lower()
+            word_freq[word] += int(freq)
             word_size[word] = len(word.encode('utf-8'))
 
     print('Building trie...')
@@ -56,7 +61,7 @@ def build_trie():
             # if len(sentence.split(' ')) < 10:
             #     continue
 
-            for word in sentence.split(' '):
+            for word in map(str.lower, sentence.split(' ')):
                 # assert word_size[word], 'Empty word found'
                 total_read_size += word_size[word]
 
@@ -67,7 +72,6 @@ def build_trie():
                 word_window.append(word)
 
                 if word_window:
-                    # print('Adding', word_window)
                     trie.add(word_window)
 
             if total_read_size >= next_log:
@@ -77,8 +81,10 @@ def build_trie():
                 )
                 next_log += LOG_EVERY_N_BYTES
 
+            if total_read_size >= FINISH_AT_N_BYTES:
                 break
 
+    print('Writing trie to file...')
     trie.dump_file(mkpath('../results/trie.bin'))
 
     trie_size = os.path.getsize(mkpath('../results/trie.bin'))
