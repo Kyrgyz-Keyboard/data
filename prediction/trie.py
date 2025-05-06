@@ -13,10 +13,12 @@ if __name__ == '__main__':
 from src.utils import PathMagic
 mkpath = PathMagic(__file__)
 
-#         L1 + 5 predictions
-#         L1 + L2 + 5 predictions
-#         L1 + L2 + L3 + 5 predictions
-LAYERS = [None, 5, 5, 5]
+#         L1 + X predictions
+#         L1 + L2 + X predictions
+#         L1 + L2 + L3 + X predictions
+# LAYERS = [None, 5, 5, 5]
+# LAYERS = [None, 3, 3, 3]
+LAYERS = [None, 50, 15]
 
 assert None not in LAYERS[1:], 'All layers except the first must have a maximum size'
 
@@ -98,7 +100,7 @@ class TrieNode:
         )
 
 
-WORD_INDEX_SHIFT = 1  # + 1 beacuse index 0 means None
+WORD_INDEX_SHIFT = 1  # + 1 because index 0 means None
 
 
 @dataclass
@@ -144,9 +146,11 @@ class Trie(TrieNode):
 
     # Helper functions:
 
+    def get_words_indexed_reverse(self) -> dict[int, str]:
+        return {index: word for word, index in self.words_indexed.items()}
+
     def to_json(self) -> TrieNodeJson:  # type: ignore[override]
-        words_indexed_reverse: dict[int, str] = {index: word for word, index in self.words_indexed.items()}
-        return super().to_json(words_indexed_reverse)
+        return super().to_json(self.get_words_indexed_reverse())
 
     def dump_file(self, file_path: str):
         with open(mkpath(file_path), 'wb') as file_obj:
@@ -157,28 +161,37 @@ class Trie(TrieNode):
         with open(mkpath(file_path), 'rb') as file_obj:
             return cls().load(file_obj)  # type: ignore[arg-type]
 
-    def fetch(self, words: list[str]) -> list[tuple[str, int]]:
-        words_indexed_reverse: dict[int, str] = {index: word for word, index in self.words_indexed.items()}
+    def fetch(self, words: list[str], max_results: int = 5) -> list[tuple[str, int]]:
+        words_indexed_reverse = self.get_words_indexed_reverse()
 
-        result = []
         cur_obj: TrieNode = self
 
         for word in words:
+            if word not in self.words_indexed:
+                print(f'Word "{word}" not found')
+                return []
             if self.words_indexed[word] not in cur_obj.children:
-                print(f'Word "{self.words_indexed[word]}" not found as a step')
-                break
+                print(f'Word "{word}" not found as a step')
+                return []
 
             cur_obj = cur_obj.children[self.words_indexed[word]]
 
-            result.extend(
-                [(words_indexed_reverse[prediction], node.freq) for prediction, node in cur_obj.children.items()]
-            )
+        return [
+            (words_indexed_reverse[prediction], node.freq)
+            for prediction, node in itertools.islice(cur_obj.children.items(), max_results)
+        ]
 
-        return result
+    def encode_word(self, word: str) -> int:
+        return self.words_indexed[word]
+
+    def decode_word(self, word_index: int) -> str:
+        return self.get_words_indexed_reverse()[word_index]
 
 
 if __name__ == '__main__':
     import json
+
+    # print(len(DECODING_TABLE))
 
     file_obj = BytesIO()
 
