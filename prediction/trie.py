@@ -18,7 +18,7 @@ mkpath = PathMagic(__file__)
 #         L1 + L2 + L3 + 5 predictions
 LAYERS = [None, 5, 5, 5]
 
-assert None not in LAYERS[1:], 'All layers except the first must have a constant size'
+assert None not in LAYERS[1:], 'All layers except the first must have a maximum size'
 
 
 _DECODING_TABLE = (
@@ -51,7 +51,6 @@ class TrieNode:
 
     def dump(self, file_obj: BytesIO, word_indices: dict[str, int], layer: int = 0):
         file_obj.write(struct.pack('>I', self.freq))
-
         if layer == len(LAYERS):
             return
 
@@ -59,18 +58,16 @@ class TrieNode:
         # print(layer, sorted_children)
         layer_size = LAYERS[layer] or len(sorted_children)
 
-        # Write the most common children
-        for i in range(layer_size):
-            if i < len(sorted_children):
-                word_index, next_node = sorted_children[i]
-            else:
-                word_index, next_node = 0, TrieNode()
+        for i in range(min(len(sorted_children), layer_size)):
+            word_index, next_node = sorted_children[i]
             file_obj.write(struct.pack('>I', word_index))
             next_node.dump(file_obj, word_indices, layer + 1)
 
+        if len(sorted_children) < layer_size:
+            file_obj.write(struct.pack('>I', 0))
+
     def load(self, file_obj: BytesIO, word_indices: dict[str, int], layer: int = 0):
         self.freq = struct.unpack('>I', file_obj.read(4))[0]
-
         if layer == len(LAYERS):
             return
 
@@ -80,11 +77,12 @@ class TrieNode:
         while (word_index_bytes := file_obj.read(4)):
             word_index = struct.unpack('>I', word_index_bytes)[0]
 
+            if word_index == 0:
+                break
+
             next_node = TrieNode()
             next_node.load(file_obj, word_indices, layer + 1)
-
-            if word_index != 0:
-                self.children[word_index] = next_node
+            self.children[word_index] = next_node
 
             index += 1
             if index == layer_size:
@@ -147,7 +145,7 @@ class Trie(TrieNode):
     # Helper functions:
 
     def to_json(self) -> TrieNodeJson:  # type: ignore[override]
-        words_indexed_reverse = {index: word for word, index in self.words_indexed.items()}
+        words_indexed_reverse: dict[int, str] = {index: word for word, index in self.words_indexed.items()}
         return super().to_json(words_indexed_reverse)
 
     def dump_file(self, file_path: str):
@@ -158,6 +156,25 @@ class Trie(TrieNode):
     def load_file(cls, file_path: str) -> 'Trie':
         with open(mkpath(file_path), 'rb') as file_obj:
             return cls().load(file_obj)  # type: ignore[arg-type]
+
+    def fetch(self, words: list[str]) -> list[tuple[str, int]]:
+        words_indexed_reverse: dict[int, str] = {index: word for word, index in self.words_indexed.items()}
+
+        result = []
+        cur_obj: TrieNode = self
+
+        for word in words:
+            if self.words_indexed[word] not in cur_obj.children:
+                print(f'Word "{self.words_indexed[word]}" not found as a step')
+                break
+
+            cur_obj = cur_obj.children[self.words_indexed[word]]
+
+            result.extend(
+                [(words_indexed_reverse[prediction], node.freq) for prediction, node in cur_obj.children.items()]
+            )
+
+        return result
 
 
 if __name__ == '__main__':
@@ -170,13 +187,13 @@ if __name__ == '__main__':
     # trie.add('one'.split())  # noqa
     # trie.add('one two'.split())  # noqa
 
-    # trie.add('lorem ipsum dolor sit'.split())  # noqa
+    trie.add('lorem ipsum dolor sit'.split())  # noqa
     # trie.add('ipsum dolor sit amet'.split())  # noqa
     # trie.add('dolor sit amet consectetur'.split())  # noqa
     # trie.add('sit amet consectetur adipiscing'.split())  # noqa
     # trie.add('amet consectetur adipiscing elit'.split())  # noqa
 
-    print(json.dumps(trie.to_json(), indent=4, ensure_ascii=False))
+    # print(json.dumps(trie.to_json(), indent=4, ensure_ascii=False))
 
     trie.dump(file_obj)
 

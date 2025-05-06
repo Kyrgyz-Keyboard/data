@@ -40,8 +40,8 @@ def build_trie():
 
     print('Building trie...')
 
-    file_size = os.path.getsize(mkpath('../results/sentences.txt'))
-    print(f'File size: {size_to_str(file_size)}')
+    source_file_size = os.path.getsize(mkpath('../results/sentences.txt'))
+    print(f'Source file size: {size_to_str(source_file_size)}')
 
     trie = Trie()
 
@@ -72,7 +72,7 @@ def build_trie():
 
             if total_read_size >= next_log:
                 print(
-                    f'Processed {size_to_str(total_read_size)} / {size_to_str(file_size)} bytes in '
+                    f'Processed {size_to_str(total_read_size)} / {size_to_str(source_file_size)} bytes in '
                     f'{perf_counter() - start_time:.0f} seconds'
                 )
                 next_log += LOG_EVERY_N_BYTES
@@ -80,6 +80,9 @@ def build_trie():
                 break
 
     trie.dump_file(mkpath('../results/trie.bin'))
+
+    trie_size = os.path.getsize(mkpath('../results/trie.bin'))
+    print(f'Trie size: {size_to_str(trie_size)}')
 
 
 if __name__ == '__main__':
