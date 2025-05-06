@@ -18,6 +18,8 @@ mkpath = PathMagic(__file__)
 #         L1 + L2 + L3 + 5 predictions
 LAYERS = [None, 5, 5, 5]
 
+assert None not in LAYERS[1:], 'All layers except the first must have a constant size'
+
 
 _DECODING_TABLE = (
     ',.:'
@@ -48,10 +50,10 @@ class TrieNode:
             self.children[word_indices[index]].add(word_indices, index + 1)
 
     def dump(self, file_obj: BytesIO, word_indices: dict[str, int], layer: int = 0):
+        file_obj.write(struct.pack('>I', self.freq))
+
         if layer == len(LAYERS):
             return
-
-        file_obj.write(struct.pack('>I', self.freq))
 
         sorted_children = sorted(self.children.items(), key=lambda x: x[1].freq, reverse=True)
         # print(layer, sorted_children)
@@ -67,10 +69,10 @@ class TrieNode:
             next_node.dump(file_obj, word_indices, layer + 1)
 
     def load(self, file_obj: BytesIO, word_indices: dict[str, int], layer: int = 0):
+        self.freq = struct.unpack('>I', file_obj.read(4))[0]
+
         if layer == len(LAYERS):
             return
-
-        self.freq = struct.unpack('>I', file_obj.read(4))[0]
 
         layer_size = LAYERS[layer] or float('inf')
 
@@ -80,8 +82,11 @@ class TrieNode:
 
             next_node = TrieNode()
             next_node.load(file_obj, word_indices, layer + 1)
-            self.children[word_index] = next_node
 
+            if word_index != 0:
+                self.children[word_index] = next_node
+
+            index += 1
             if index == layer_size:
                 break
 
@@ -90,6 +95,7 @@ class TrieNode:
             self.freq, {
                 words_indexed_reverse[i]: child.to_json(words_indexed_reverse)
                 for i, child in self.children.items()
+                # if i >= WORD_INDEX_SHIFT
             }
         )
 
@@ -106,7 +112,8 @@ class Trie(TrieNode):
             self.words_indexed.setdefault(word, len(self.words_indexed) + WORD_INDEX_SHIFT)
             for word in words
         ]
-        for slice_start in range(len(word_indices) - 1):
+        # TODO: Can be optimized to len(word_indices) - 1 if we don't store 1-grams
+        for slice_start in range(len(word_indices)):
             super().add(word_indices, slice_start)
 
     def dump(self, file_obj: BytesIO):  # type: ignore[override]
@@ -122,7 +129,7 @@ class Trie(TrieNode):
         # Write the trie
         super().dump(file_obj, self.words_indexed)
 
-    def load(self, file_obj: BytesIO):  # type: ignore[override]
+    def load(self, file_obj: BytesIO) -> 'Trie':  # type: ignore[override]
         # Read the amount of words
         trie_size = struct.unpack('>I', file_obj.read(4))[0]
 
@@ -135,8 +142,7 @@ class Trie(TrieNode):
             self.words_indexed[word] = next(counter)
 
         super().load(file_obj, self.words_indexed)
-
-        return trie
+        return self
 
     # Helper functions:
 
@@ -161,16 +167,21 @@ if __name__ == '__main__':
 
     trie = Trie()
 
-    trie.add('lorem ipsum dolor sit'.split())  # noqa
+    # trie.add('one'.split())  # noqa
+    # trie.add('one two'.split())  # noqa
+
+    # trie.add('lorem ipsum dolor sit'.split())  # noqa
     # trie.add('ipsum dolor sit amet'.split())  # noqa
     # trie.add('dolor sit amet consectetur'.split())  # noqa
     # trie.add('sit amet consectetur adipiscing'.split())  # noqa
     # trie.add('amet consectetur adipiscing elit'.split())  # noqa
 
+    print(json.dumps(trie.to_json(), indent=4, ensure_ascii=False))
+
     trie.dump(file_obj)
 
     file_obj.seek(0)
 
-    new_obj = Trie().load(file_obj)
+    new_trie = Trie().load(file_obj)
 
-    print(json.dumps(new_obj.to_json(), indent=4, ensure_ascii=False))
+    print(json.dumps(new_trie.to_json(), indent=4, ensure_ascii=False))
