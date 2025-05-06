@@ -6,7 +6,7 @@ if __name__ == '__main__':
 from src.utils import PathMagic
 mkpath = PathMagic(__file__)
 
-from prediction.trie import Trie, TrieNode
+from prediction.trie import Trie
 
 
 def main(request: str):
@@ -17,13 +17,9 @@ def main(request: str):
     print(f'Trie knows about {len(trie.words_indexed):,d} words')
 
     print(len(trie.children))
+    print(trie.children[trie.words_indexed['Мен']])
 
-    cur_obj: TrieNode = trie
-    for word in words:
-        if trie.words_indexed[word] not in cur_obj.children:
-            print(f'Word "{word}" not found as a step')
-            return
-        cur_obj = cur_obj.children[trie.words_indexed[word]]
+    print(trie.fetch(words))
 
 
 if __name__ == '__main__':
