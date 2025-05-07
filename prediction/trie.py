@@ -1,7 +1,5 @@
-from typing import Iterable
+from typing import Sequence, Iterable
 
-from dataclasses import dataclass, field
-from collections import defaultdict
 from io import BytesIO
 import itertools
 import struct
@@ -13,110 +11,105 @@ if __name__ == '__main__':
 from src.utils import PathMagic
 mkpath = PathMagic(__file__)
 
-#         L1 + X predictions
-#         L1 + L2 + X predictions
-#         L1 + L2 + L3 + X predictions
-# LAYERS = [None, 5, 5, 5]
-# LAYERS = [None, 3, 3, 3]
-LAYERS = [None, 50, 15]
+# ======================================================================================================================
 
-assert None not in LAYERS[1:], 'All layers except the first must have a maximum size'
-
-
-_DECODING_TABLE = (
-    ',.:'
-    '0123456789'
-    'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-    'abcdefghijklmnopqrstuvwxyz'
-    'АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ'
-    'абвгдеёжзийклмнопрстуфхцчшщъыьэюя'
-    'ҢҮӨ'
-    'ңүө'
-)
-ENCODING_TABLE = {letter: index.to_bytes(1, 'big') for index, letter in enumerate(_DECODING_TABLE, start=1)}
-DECODING_TABLE = {index.to_bytes(1, 'big'): letter for index, letter in enumerate(_DECODING_TABLE, start=1)}
-
-
-TrieNodeJson = tuple[int, dict[str, 'TrieNodeJson']]
-
-
-@dataclass
-class TrieNode:
-    freq: int = 0
-    children: dict[int, 'TrieNode'] = field(default_factory=lambda: defaultdict(TrieNode))
-
-    def add(self, word_indices: list[int], index: int):
-        if index == len(word_indices) - 1:
-            self.children[word_indices[index]].freq += 1
-        else:
-            self.children[word_indices[index]].add(word_indices, index + 1)
-
-    def dump(self, file_obj: BytesIO, word_indices: dict[str, int], layer: int = 0):
-        file_obj.write(struct.pack('>I', self.freq))
-        if layer == len(LAYERS):
-            return
-
-        sorted_children = sorted(self.children.items(), key=lambda x: x[1].freq, reverse=True)
-        # print(layer, sorted_children)
-        layer_size = LAYERS[layer] or len(sorted_children)
-
-        for i in range(min(len(sorted_children), layer_size)):
-            word_index, next_node = sorted_children[i]
-            file_obj.write(struct.pack('>I', word_index))
-            next_node.dump(file_obj, word_indices, layer + 1)
-
-        if len(sorted_children) < layer_size:
-            file_obj.write(struct.pack('>I', 0))
-
-    def load(self, file_obj: BytesIO, word_indices: dict[str, int], layer: int = 0):
-        self.freq = struct.unpack('>I', file_obj.read(4))[0]
-        if layer == len(LAYERS):
-            return
-
-        layer_size = LAYERS[layer] or float('inf')
-
-        index = 0
-        while (word_index_bytes := file_obj.read(4)):
-            word_index = struct.unpack('>I', word_index_bytes)[0]
-
-            if word_index == 0:
-                break
-
-            next_node = TrieNode()
-            next_node.load(file_obj, word_indices, layer + 1)
-            self.children[word_index] = next_node
-
-            index += 1
-            if index == layer_size:
-                break
-
-    def to_json(self, words_indexed_reverse: dict[int, str]) -> TrieNodeJson:
-        return (
-            self.freq, {
-                words_indexed_reverse[i]: child.to_json(words_indexed_reverse)
-                for i, child in self.children.items()
-                # if i >= WORD_INDEX_SHIFT
-            }
-        )
+LAYERS = [(None, float('inf')), (10, 5), (5, 5), (5, 0)]
 
 
 WORD_INDEX_SHIFT = 1  # + 1 because index 0 means None
 
+_DECODING_TABLE = (
+    ',.:'
+    '0123456789'
+    # 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    'abcdefghijklmnopqrstuvwxyz'
+    # 'АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ'
+    'абвгдеёжзийклмнопрстуфхцчшщъыьэюя'
+    # 'ҢҮӨ'
+    'ңүө'
+)
 
-@dataclass
-class Trie(TrieNode):
-    words_indexed: dict[str, int] = field(default_factory=dict)
+# ======================================================================================================================
 
-    def add(self, words: Iterable[str]):  # type: ignore[override]
-        word_indices = [
-            self.words_indexed.setdefault(word, len(self.words_indexed) + WORD_INDEX_SHIFT)
-            for word in words
-        ]
+ENCODING_TABLE = {letter: index.to_bytes(1, 'big') for index, letter in enumerate(_DECODING_TABLE, start=1)}
+DECODING_TABLE = {index.to_bytes(1, 'big'): letter for index, letter in enumerate(_DECODING_TABLE, start=1)}
+
+
+TrieNode = list[int, dict[int, 'TrieNode']]  # type: ignore
+TrieNodeRepr = tuple[int, dict[str, 'TrieNodeRepr']]
+
+
+# def _add(cur_data: dict[int, 'TrieNode'], word_indices: list[int], index: int):
+#     if index == len(word_indices) - 1:
+#         cur_data.setdefault(word_indices[index], [0, {}])[0] += 1
+#     else:
+#         _add(
+#             cur_data.setdefault(word_indices[index], [0, {}])[1],
+#             word_indices,
+#             index + 1
+#         )
+
+
+def _sort(node: TrieNode):
+    node[1] = dict(sorted(node[1].items(), key=lambda x: x[1][0], reverse=True))
+    for child in node[1].values():
+        _sort(child)
+
+
+def _dump(cur_data: dict[int, 'TrieNode'], file_obj: BytesIO, words_indexed: dict[str, int], layer: int = 0):
+    if layer == len(LAYERS):
+        return
+
+    for i, (word_index, (freq, next_node)) in enumerate(itertools.islice(cur_data.items(), LAYERS[layer][0])):
+        file_obj.write(struct.pack('>I', word_index))
+        file_obj.write(struct.pack('>I', freq))
+        if i < LAYERS[layer][1]:
+            _dump(next_node, file_obj, words_indexed, layer + 1)
+
+    if len(cur_data) < (LAYERS[layer][0] or len(cur_data)):
+        file_obj.write(struct.pack('>I', 0))
+
+
+def _load(cur_data: dict[int, 'TrieNode'], file_obj: BytesIO, words_indexed: dict[str, int], layer: int = 0):
+    if layer == len(LAYERS):
+        return
+
+    index = 0
+    while (word_index_bytes := file_obj.read(4)):
+        word_index = struct.unpack('>I', word_index_bytes)[0]
+
+        if word_index == 0:
+            break
+
+        freq = struct.unpack('>I', file_obj.read(4))[0]
+        next_node = [freq, {}]
+        cur_data[word_index] = next_node
+        if index < LAYERS[layer][1]:
+            _load(next_node[1], file_obj, words_indexed, layer + 1)
+
+        index += 1
+        if index == LAYERS[layer][0]:
+            break
+
+
+class Trie:
+    def __init__(self, all_words: Iterable[str]):
+        self.words_indexed: dict[str, int] = {
+            word: index
+            for index, word in enumerate(all_words, start=WORD_INDEX_SHIFT)
+        }
+        self.data: dict[int, 'TrieNode'] = {}
+
+    def add(self, words: Sequence[str]):
+        # print(self.words_indexed)
         # TODO: Can be optimized to len(word_indices) - 1 if we don't store 1-grams
-        for slice_start in range(len(word_indices)):
-            super().add(word_indices, slice_start)
+        for slice_start in range(len(words) - 1):
+            cur_data = self.data
+            for i in range(slice_start, len(words) - 1):
+                cur_data = cur_data.setdefault(self.words_indexed[words[i]], [0, {}])[1]
+            cur_data.setdefault(self.words_indexed[words[-1]], [0, {}])[0] += 1
 
-    def dump(self, file_obj: BytesIO):  # type: ignore[override]
+    def dump(self, file_obj: BytesIO):
         # Write the amounf of words
         file_obj.write(struct.pack('>I', len(self.words_indexed)))
 
@@ -127,30 +120,46 @@ class Trie(TrieNode):
             file_obj.write(b'\x00')
 
         # Write the trie
-        super().dump(file_obj, self.words_indexed)
+        print('Sorting...')
+        for node in self.data.values():
+            _sort(node)
+        print('Dumping...')
+        _dump(self.data, file_obj, self.words_indexed)
 
-    def load(self, file_obj: BytesIO) -> 'Trie':  # type: ignore[override]
+    @classmethod
+    def load(cls, file_obj: BytesIO) -> 'Trie':
         # Read the amount of words
         trie_size = struct.unpack('>I', file_obj.read(4))[0]
 
         # Read the words list
-        counter = itertools.count(WORD_INDEX_SHIFT)
+        words_indexed = []
         for _ in range(trie_size):
             word = ''
             while (current_byte := file_obj.read(1)) != b'\x00':
                 word += DECODING_TABLE[current_byte]
-            self.words_indexed[word] = next(counter)
+            words_indexed.append(word)
 
-        super().load(file_obj, self.words_indexed)
-        return self
+        result = cls(words_indexed)
 
-    # Helper functions:
+        # Read the trie
+        _load(result.data, file_obj, result.words_indexed)
+        return result
+
+    # Helper functions (slow):
 
     def get_words_indexed_reverse(self) -> dict[int, str]:
         return {index: word for word, index in self.words_indexed.items()}
 
-    def to_json(self) -> TrieNodeJson:  # type: ignore[override]
-        return super().to_json(self.get_words_indexed_reverse())
+    def get_data(self) -> dict[str, 'TrieNodeRepr']:
+        words_indexed_reverse = self.get_words_indexed_reverse()
+
+        def convert_nodes(children: dict[int, 'TrieNode']) -> dict[str, 'TrieNodeRepr']:
+            return {
+                words_indexed_reverse[i]: (child[0], convert_nodes(child[1]))
+                for i, child in children.items()
+            }
+
+        return convert_nodes(self.data)
 
     def dump_file(self, file_path: str):
         with open(mkpath(file_path), 'wb') as file_obj:
@@ -159,26 +168,26 @@ class Trie(TrieNode):
     @classmethod
     def load_file(cls, file_path: str) -> 'Trie':
         with open(mkpath(file_path), 'rb') as file_obj:
-            return cls().load(file_obj)  # type: ignore[arg-type]
+            return cls.load(file_obj)  # type: ignore[arg-type]
 
     def fetch(self, words: list[str], max_results: int = 5) -> list[tuple[str, int]]:
         words_indexed_reverse = self.get_words_indexed_reverse()
 
-        cur_obj: TrieNode = self
+        cur_data = self.data
 
         for word in words:
             if word not in self.words_indexed:
                 print(f'Word "{word}" not found')
                 return []
-            if self.words_indexed[word] not in cur_obj.children:
+            if self.words_indexed[word] not in cur_data:
                 print(f'Word "{word}" not found as a step')
                 return []
 
-            cur_obj = cur_obj.children[self.words_indexed[word]]
+            cur_data = cur_data[self.words_indexed[word]][1]
 
         return [
-            (words_indexed_reverse[prediction], node.freq)
-            for prediction, node in itertools.islice(cur_obj.children.items(), max_results)
+            (words_indexed_reverse[prediction], node[0])
+            for prediction, node in itertools.islice(cur_data.items(), max_results)
         ]
 
     def encode_word(self, word: str) -> int:
@@ -195,23 +204,27 @@ if __name__ == '__main__':
 
     file_obj = BytesIO()
 
-    trie = Trie()
+    trie = Trie(['lorem', 'ipsum', 'dolor', 'sit', 'amet', 'consectetur', 'adipiscing', 'elit'])
 
     # trie.add('one'.split())  # noqa
     # trie.add('one two'.split())  # noqa
 
+    trie.add('lorem ipsum dolor adipiscing'.split())  # noqa
+    trie.add('lorem ipsum dolor sit'.split())  # noqa
+    trie.add('lorem ipsum dolor sit'.split())  # noqa
+    trie.add('lorem ipsum dolor sit'.split())  # noqa
     trie.add('lorem ipsum dolor sit'.split())  # noqa
     # trie.add('ipsum dolor sit amet'.split())  # noqa
     # trie.add('dolor sit amet consectetur'.split())  # noqa
     # trie.add('sit amet consectetur adipiscing'.split())  # noqa
     # trie.add('amet consectetur adipiscing elit'.split())  # noqa
 
-    # print(json.dumps(trie.to_json(), indent=4, ensure_ascii=False))
+    # print(json.dumps(trie.get_data(), indent=4, ensure_ascii=False))
 
     trie.dump(file_obj)
 
     file_obj.seek(0)
 
-    new_trie = Trie().load(file_obj)
+    new_trie = Trie.load(file_obj)
 
-    print(json.dumps(new_trie.to_json(), indent=4, ensure_ascii=False))
+    print(json.dumps(new_trie.get_data(), indent=4, ensure_ascii=False))
