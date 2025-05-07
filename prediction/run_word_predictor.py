@@ -10,13 +10,13 @@ from prediction.trie import Trie
 
 
 def main(request: str):
-    trie = Trie().load_file(mkpath('../results/trie.bin'))
+    trie = Trie.load_file(mkpath('../results/trie.bin'))
     words = list(map(str.lower, request.split()))
 
     print('Request:', words)
     print(f'Trie knows about {len(trie.words_indexed):,d} words')
 
-    print(trie.fetch(['Сүйүктүү'.lower()]))
+    # print(trie.fetch(['Сүйүктүү'.lower()]))
     print()
 
     for start_index in range(len(words)):
@@ -29,6 +29,6 @@ if __name__ == '__main__':
     # with open(mkpath('../results/trie.bin'), 'wb') as file_obj:
     #     trie.dump(file_obj)
 
-    main('Сүйүктүү мырзаңызга кандай')
+    # main('Сүйүктүү мырзаңызга кандай')
     # main('Апам кадрды')
-    # main('COVID 19')
+    main('COVID 19')

@@ -14,6 +14,7 @@ mkpath = PathMagic(__file__)
 from prediction.trie import LAYERS, Trie
 
 
+# FINISH_AT_N_BYTES = 1024 * 1024 * 1024  # 1 GB
 FINISH_AT_N_BYTES = 500 * 1024 * 1024  # 500 MB
 # FINISH_AT_N_BYTES = 100 * 1024 * 1024  # 100 MB
 # FINISH_AT_N_BYTES = 30 * 1024 * 1024  # 100 MB
@@ -43,12 +44,19 @@ def build_trie():
             word_freq[word] += int(freq)
             word_size[word] = len(word.encode('utf-8'))
 
+    allowed_words: dict[str, int] = {
+        word: freq
+        for word, freq in word_freq.items()
+        if freq >= 100
+    }
+    del word_freq
+
     print('Building trie...')
 
     source_file_size = os.path.getsize(mkpath('../results/sentences.txt'))
     print(f'Source file size: {size_to_str(source_file_size)}')
 
-    trie = Trie()
+    trie = Trie(allowed_words)
 
     total_read_size = 0
     next_log = LOG_EVERY_N_BYTES
@@ -65,14 +73,12 @@ def build_trie():
                 # assert word_size[word], 'Empty word found'
                 total_read_size += word_size[word]
 
-                if word_freq[word] < 100:
+                if word not in allowed_words:
                     word_window.clear()
                     continue
 
                 word_window.append(word)
-
-                if word_window:
-                    trie.add(word_window)
+                trie.add(word_window)
 
             if total_read_size >= next_log:
                 print(
