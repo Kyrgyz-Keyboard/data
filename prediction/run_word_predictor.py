@@ -10,17 +10,29 @@ from prediction.trie import Trie
 
 
 def main(request: str):
-    trie = Trie.load_file(mkpath('../results/trie.bin'))
-    words = list(map(str.lower, request.split()))
+    print('Reading trie...')
 
-    print('Request:', words)
+    trie = Trie.load_file(mkpath('../results/trie.bin'))
     print(f'Trie knows about {len(trie.words_indexed):,d} words')
 
-    # print(trie.fetch(['Сүйүктүү'.lower()]))
-    print()
+    words = list(map(str.lower, request.split()))
+    print('Request:', words)
+
+    # print(trie.get_data())
+
+    # if 'covid (False)' in trie.get_data():
+    #     print(trie.get_data()['covid (False)'])
+    # if 'covid (True)' in trie.get_data():
+    #     print(trie.get_data()['covid (True)'])
+
+    # if '19 (False)' in trie.get_data():
+    #     print(trie.get_data()['19 (False)'])
+    # if '19 (True)' in trie.get_data():
+    #     print(trie.get_data()['19 (True)'])
+    # print()
 
     for start_index in range(len(words)):
-        print(words[start_index:], trie.fetch(words[start_index:]))
+        print(words[start_index:], list(trie.fetch(words[start_index:])))
 
 
 if __name__ == '__main__':
@@ -32,6 +44,6 @@ if __name__ == '__main__':
     # main('Сүйүктүү мырзаңызга кандай')
     # main('Апам кадрды')
     # main('үйдө компьютер')
-    main('Мен бүгүн дүкөнгө')
-    # main('COVID 19')
+    # main('Мен бүгүн дүкөнгө')
+    main('COVID 19')
     # main('жаңылыктар')

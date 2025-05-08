@@ -11,22 +11,28 @@ if __name__ == '__main__':
 from src.utils import PathMagic
 mkpath = PathMagic(__file__)
 
-from prediction.trie import LAYERS, Trie
+from prediction.trie import Trie
 
 
 # FINISH_AT_N_BYTES = 1024 * 1024 * 1024  # 1 GB
 # FINISH_AT_N_BYTES = 500 * 1024 * 1024  # 500 MB
+# FINISH_AT_N_BYTES = 300 * 1024 * 1024  # 300 MB
 FINISH_AT_N_BYTES = 100 * 1024 * 1024  # 100 MB
-# FINISH_AT_N_BYTES = 30 * 1024 * 1024  # 100 MB
+# FINISH_AT_N_BYTES = 30 * 1024 * 1024  # 30 MB
+# FINISH_AT_N_BYTES = 10 * 1024 * 1024  # 10 MB
 # FINISH_AT_N_BYTES = 1024  # 1 KB
 
 LOG_EVERY_N_BYTES = 10 * 1024 * 1024  # 10 MB
 
 
+WORD_FREQ_THRESHOLD = 10
+RESULT_FREQ_THRESHOLD = 3
+
+
 def size_to_str(size_bytes: int) -> str:
     if size_bytes == 0:
         return '0 B'
-    size_name = ('B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB')
+    size_name = ('B', 'KB', 'MB', 'GB', 'TB')
     i = int(math.floor(math.log(size_bytes, 1024)))
     p = math.pow(1024, i)
     s = round(size_bytes / p, 2)
@@ -34,7 +40,7 @@ def size_to_str(size_bytes: int) -> str:
 
 
 def build_trie():
-    print('Constructing words list...')
+    print('Reading words list...')
     word_size = {}
     word_freq: dict[str, int] = defaultdict(int)
     with open(mkpath('../results/word_freq.txt'), 'r', encoding='utf-8') as file:
@@ -44,19 +50,34 @@ def build_trie():
             word_freq[word] += int(freq)
             word_size[word] = len(word.encode('utf-8'))
 
-    allowed_words: dict[str, int] = {
-        word: freq
+    allowed_words: set[str] = {
+        word
         for word, freq in word_freq.items()
-        if freq >= 100
+        if freq >= WORD_FREQ_THRESHOLD
     }
     del word_freq
 
-    print('Building trie...')
+    print(f'Allowed words: {len(allowed_words):,d}')
+
+    print('Reading Apertium mapper...')
+    apertium_mapper: dict[str, str] = {}
+    with open(mkpath('../results/apertium_mapper.txt'), 'r', encoding='utf-8') as file:
+        for line in map(str.strip, filter(None, file)):
+            if ' ' in line:
+                key, value = map(str.lower, line.split(' '))
+                allowed_words.add(value)
+                apertium_mapper[key] = value
+
+    print(f'Allowed words (with apertium values): {len(allowed_words):,d}')
+
+    print('Preparation done')
+    print()
 
     source_file_size = os.path.getsize(mkpath('../results/sentences.txt'))
     print(f'Source file size: {size_to_str(source_file_size)}')
 
-    trie = Trie(allowed_words)
+    print('Building trie...')
+    trie = Trie(allowed_words, apertium_mapper)
 
     total_read_size = 0
     next_log = LOG_EVERY_N_BYTES
@@ -64,18 +85,10 @@ def build_trie():
 
     with open(mkpath('../results/sentences.txt'), 'r', encoding='utf-8') as file:
         for sentence in map(str.strip, file):
-            word_window: deque[str] = deque(maxlen=len(LAYERS))
-
-            # if len(sentence.split(' ')) < 10:
-            #     continue
+            word_window: deque[str] = deque(maxlen=Trie.MAX_LAYERS)
 
             for word in map(str.lower, sentence.split(' ')):
-                # assert word_size[word], 'Empty word found'
                 total_read_size += word_size[word]
-
-                if word not in allowed_words:
-                    word_window.clear()
-                    continue
 
                 word_window.append(word)
                 trie.add(word_window)
@@ -91,7 +104,7 @@ def build_trie():
             #     break
 
     print('Writing trie to file...')
-    trie.dump_file(mkpath('../results/trie.bin'))
+    trie.dump_file(mkpath('../results/trie.bin'), RESULT_FREQ_THRESHOLD)
 
     trie_size = os.path.getsize(mkpath('../results/trie.bin'))
     print(f'Trie size: {size_to_str(trie_size)}')
