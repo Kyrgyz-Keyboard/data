@@ -11,7 +11,7 @@ from src.suffixes import ApertiumMapper, get_appertium_mapper
 from src.tokenizer import Tokenizer
 
 
-BATCH_SIZE = 100_000
+BATCH_SIZE = 1_000_000
 # os.environ['HF_HUB_OFFLINE'] = '1'
 
 

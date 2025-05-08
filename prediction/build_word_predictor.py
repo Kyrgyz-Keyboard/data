@@ -15,8 +15,8 @@ from prediction.trie import LAYERS, Trie
 
 
 # FINISH_AT_N_BYTES = 1024 * 1024 * 1024  # 1 GB
-FINISH_AT_N_BYTES = 500 * 1024 * 1024  # 500 MB
-# FINISH_AT_N_BYTES = 100 * 1024 * 1024  # 100 MB
+# FINISH_AT_N_BYTES = 500 * 1024 * 1024  # 500 MB
+FINISH_AT_N_BYTES = 100 * 1024 * 1024  # 100 MB
 # FINISH_AT_N_BYTES = 30 * 1024 * 1024  # 100 MB
 # FINISH_AT_N_BYTES = 1024  # 1 KB
 
@@ -87,8 +87,8 @@ def build_trie():
                 )
                 next_log += LOG_EVERY_N_BYTES
 
-            if total_read_size >= FINISH_AT_N_BYTES:
-                break
+            # if total_read_size >= FINISH_AT_N_BYTES:
+            #     break
 
     print('Writing trie to file...')
     trie.dump_file(mkpath('../results/trie.bin'))
