@@ -13,7 +13,7 @@ mkpath = PathMagic(__file__)
 
 # ======================================================================================================================
 
-LAYERS = [(None, float('inf')), (10, 5), (5, 5), (5, 0)]
+LAYERS = [(None, float('inf')), (30, 15), (15, 10), (5, 0)]
 
 
 WORD_INDEX_SHIFT = 1  # + 1 because index 0 means None
@@ -121,8 +121,11 @@ class Trie:
 
         # Write the trie
         print('Sorting...')
-        for node in self.data.values():
+        for i, node in enumerate(self.data.values()):
             _sort(node)
+            if i % 100_000 == 0:
+                print(f'Done sorting {i + 1} / {len(self.data)}')
+
         print('Dumping...')
         _dump(self.data, file_obj, self.words_indexed)
 

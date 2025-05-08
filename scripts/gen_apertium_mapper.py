@@ -4,11 +4,11 @@
 # TODO: create instructions for installation and `requirements.txt`
 
 
-from typing import TypeVar, Iterator
+from typing import Iterable, Generator, TypeVar
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from itertools import batched
 from math import ceil
+import itertools
 import sys
 import os
 
@@ -21,9 +21,6 @@ from src.utils import PathMagic, empty_file
 mkpath = PathMagic(__file__)
 
 from src.utils import write_file, print_async
-
-
-T = TypeVar('T')
 
 
 KYRGYZ_WHITELIST_WORDS = {
@@ -41,12 +38,16 @@ KYRGYZ_WHITELIST_WORDS = {
 }
 
 
-def chunkify(array: list[T], n: int) -> Iterator[list[T]]:
-    k, m = divmod(len(array), n)
-    yield from (
-        array[i * k + min(i, m):(i + 1) * k + min(i + 1, m)]
-        for i in range(n)
-    )
+T = TypeVar('T')
+
+
+def batched(iterable: Iterable[T], n: int) -> Generator[list[T]]:
+    it = iter(iterable)
+    while True:
+        chunk = list(itertools.islice(it, n))
+        if not chunk:
+            break
+        yield chunk
 
 
 def process_chunk(
