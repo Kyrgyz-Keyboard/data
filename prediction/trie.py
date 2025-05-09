@@ -193,7 +193,7 @@ class Trie:
         with open(mkpath(file_path), 'rb') as file_obj:
             return cls.load(file_obj, *args, **kwargs)  # type: ignore[arg-type]
 
-    def fetch(self, words: list[str], max_results: int = 10) -> Generator[tuple[bool, str]]:
+    def fetch(self, words: list[str], max_results: int = 10) -> Generator[tuple[bool, str], None, None]:
         words_indexed_reverse = self.get_words_indexed_reverse()
 
         cur_data = self.data

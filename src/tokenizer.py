@@ -80,7 +80,7 @@ class Tokenizer:
     )
 
     @classmethod
-    def process_text(cls, text: str) -> Generator[list[str]]:
+    def process_text(cls, text: str) -> Generator[list[str], None, None]:
         for sentence in filter(None, map(str.strip, cls.SENTENCE_SPLIT_PATERN.split(
             text.translate(cls.TRANSLATION_TABLE)
         ))):

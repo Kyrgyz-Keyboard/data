@@ -68,7 +68,8 @@ class FileWriter:
     _data_size: Value      # type: ignore
     _wait_lock: Lock       # type: ignore
     _pending_tasks: Value  # type: ignore
-    _max_size: int = 1_000_000_000  # 1 GB
+    # _max_size: int = 1_000_000_000
+    _max_size: int = 1_000_000_000_000
     _num_threads: int = 10
 
     @classmethod
@@ -145,7 +146,7 @@ class FileWriter:
             while cls._data_size.value and cls._data_size.value + cur_data_size > cls._max_size:
                 print_async(
                     '[FileWriter] Data queue too large, waiting... '
-                    f'({cls._data_size.value} + {cur_data_size} > {cls._max_size}, '
+                    f'({cls._data_size.value:,d} + {cur_data_size:,d} > {cls._max_size:,d}, '
                     f'{cls._queue.qsize()} tasks in queue, {cls._pending_tasks.value} pending)'
                 )
                 sleep(1)
