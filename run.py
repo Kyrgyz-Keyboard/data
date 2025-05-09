@@ -21,7 +21,7 @@ def process_chunk(
     texts: tuple[tuple[int, str], ...],
     apertium_mapper: ApertiumMapper
 ):
-    print_async(f'Worker {batch_num}_{worker_num} started processing {len(texts)} texts')
+    print_async(f'Worker {batch_num}_{worker_num} started processing {len(texts):,d} texts')
 
     sentences: list[list[str]] = []
     sentences_of_bases_apertium: list[list[str]] = []
@@ -49,31 +49,35 @@ def process_chunk(
                 sentences_of_bases_apertium.append(sentence_of_bases_apertium)
 
     # print_async(f'Worker {batch_num}_{worker_num} is storing sentences...')
-    FileWriter.write_file(
-        f'results/sentences/{batch_num}_{worker_num}.txt',
-        ''.join(sentence + '\n' for sentence in map(' '.join, sentences))
-    )
+    # FileWriter.write_file(
+    #     f'results/sentences/{batch_num}_{worker_num}.txt',
+    #     ''.join(sentence + '\n' for sentence in map(' '.join, sentences))
+    # )
     FileWriter.write_file(
         'results/sentences.txt',
         ''.join(sentence + '\n' for sentence in map(' '.join, sentences)),
         append=True
     )
 
-    FileWriter.write_file(
-        f'results/sentences_of_bases_apertium/{batch_num}_{worker_num}.txt',
-        '\n'.join(map(' '.join, sentences_of_bases_apertium)),
-    )
-    FileWriter.write_file(
-        'results/sentences_of_bases_apertium.txt',
-        '\n'.join(map(' '.join, sentences_of_bases_apertium)),
-        append=True
-    )
+    # FileWriter.write_file(
+    #     f'results/sentences_of_bases_apertium/{batch_num}_{worker_num}.txt',
+    #     '\n'.join(map(' '.join, sentences_of_bases_apertium)),
+    # )
+    # FileWriter.write_file(
+    #     'results/sentences_of_bases_apertium.txt',
+    #     '\n'.join(map(' '.join, sentences_of_bases_apertium)),
+    #     append=True
+    # )
 
     # print_async(f'Worker {batch_num}_{worker_num} finished writing results')
     return word_freq, base_freq_apertium
 
 
 def main():
+    num_workers = os.cpu_count() or 4
+    # num_workers = os.process_cpu_count() or os.cpu_count() or 4
+    # num_workers = 1
+
     bind_args = FileWriter.init()
     apertium_mapper = get_appertium_mapper()
 
@@ -85,19 +89,16 @@ def main():
         'HuggingFaceFW/fineweb-2',
         name='kir_Cyrl',
         split='train',
-        num_proc=4,
+        num_proc=num_workers,
         # streaming=True
     ).select_columns('text')
 
-    print(f'Texts in dataset: {len(dataset)}')
+    print(f'Texts in dataset: {len(dataset):,d}')
 
-    num_workers = os.cpu_count() or 4
-    # num_workers = os.process_cpu_count() or os.cpu_count() or 4
-    # num_workers = 1
     batches_to_process = ceil(len(dataset) / BATCH_SIZE)
     print(
-        f'Using {num_workers} workers and {batches_to_process} batches of size {BATCH_SIZE} '
-        f'({max(1, ceil(BATCH_SIZE / num_workers))} texts per run)'
+        f'Using {num_workers} workers and {batches_to_process} batches of size {BATCH_SIZE:,d} '
+        f'({max(1, ceil(BATCH_SIZE / num_workers)):,d} texts per run)'
     )
 
     word_freq: dict[str, int] = defaultdict(int)
@@ -138,7 +139,7 @@ def main():
                     base_apertium_freq[base] += freq
                 del word_freq_chunk, base_apertium_freq_chunk
 
-            print_async(f'Batch processed in {perf_counter() - start_time:.2f} seconds')
+            print_async(f'Batch processed in {perf_counter() - start_time:.0f} seconds')
 
     print('Sorting...')
     word_freq_sorted = sorted(word_freq.items(), key=lambda x: x[1], reverse=True)
