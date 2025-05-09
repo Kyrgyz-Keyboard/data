@@ -34,6 +34,9 @@ DECODING_TABLE = {index.to_bytes(1, 'big'): letter for index, letter in enumerat
 TrieNode = list[int, dict[tuple[bool, int], 'TrieNode']]  # type: ignore[type-arg]
 TrieNodeRepr = tuple[int, dict[str, 'TrieNodeRepr']]
 
+RETURN_MARKER = 1 << 7
+STEM_MARKER = 1 << 6
+
 
 def _calc_total_freq(node: TrieNode):
     for next_node in node[1].values():
@@ -59,37 +62,54 @@ def _dump(
         byte_repr = bytearray(struct.pack('>I', word_index)[1:])
         # Set first bit of the first byte of byte_repr to 1 if is_stem else 0:
         if is_stem:
-            byte_repr[0] |= (1 << 7)
+            byte_repr[0] |= STEM_MARKER
 
         file_obj.write(byte_repr)
         # file_obj.write(struct.pack('>I', freq))
         if layer < Trie.MAX_LAYERS:
             _dump(next_node, file_obj, freq_threshold, layer + 1)
 
-    file_obj.write(b'\xff')
+    pos = file_obj.tell()
+    return_amount = 1
+    if pos:
+        file_obj.seek(pos - 1)
+        last_byte = file_obj.read(1)
+
+        if last_byte[0] & RETURN_MARKER:  # Is return marker
+            val = last_byte[0] & ~RETURN_MARKER
+            return_amount = val + 1
+            file_obj.seek(pos - 1)
+        else:
+            file_obj.seek(pos)
+
+    file_obj.write(bytes([RETURN_MARKER | return_amount]))  # New return marker
 
 
 def _load(
     cur_data: dict[tuple[bool, int], 'TrieNode'],
     file_obj: BytesIO,
     layer: int = 1
-):
+) -> int:
     while (word_index_byte1 := file_obj.read(1)):
-        if word_index_byte1 == b'\xff':
-            break
+        is_return = bool(word_index_byte1[0] & RETURN_MARKER)
+        if is_return:
+            how_much_return = int.from_bytes(word_index_byte1, 'big') & ~RETURN_MARKER
+            return how_much_return - 1
 
-        # Read the first bit of word_index_byte1 into is_stem:
-        is_stem = bool(word_index_byte1[0] & (1 << 7))
+        is_stem = bool(word_index_byte1[0] & STEM_MARKER)
 
-        # Clear the first bit of word_index_byte1
-        word_index = struct.unpack('>I', b'\x00' + bytes([word_index_byte1[0] & ~(1 << 7)]) + file_obj.read(2))[0]
+        word_index = struct.unpack('>I', b'\x00' + bytes([word_index_byte1[0] & ~STEM_MARKER]) + file_obj.read(2))[0]
 
         # freq = struct.unpack('>I', file_obj.read(4))[0]
         # next_node = [freq, {}]
         next_node: TrieNode = [0, {}]
         cur_data[(is_stem, word_index)] = next_node
         if layer < Trie.MAX_LAYERS:
-            _load(next_node[1], file_obj, layer + 1)
+            how_much_return = _load(next_node[1], file_obj, layer + 1)
+            if how_much_return:
+                return how_much_return - 1
+
+    return 0
 
 
 class Trie:
@@ -104,8 +124,12 @@ class Trie:
         self.apertium_mapper = apertium_mapper or {}
 
         words_count_bits = ceil(log2(len(self.words_indexed)))
-        assert words_count_bits <= 22, f'Words count should be not more than 22 bits: currently {words_count_bits} bits'
+        # Reserved bits: 3
+        # 24 - 3 = 21
+        assert words_count_bits <= 21, f'Words count should be not more than 22 bits: currently {words_count_bits} bits'
         print(f'Trie intialized with {len(self.words_indexed):,d} words ({ceil(log2(len(self.words_indexed)))} bits)')
+
+        assert Trie.MAX_LAYERS < 128, 'Max layers should be less than 128 for the return counter to work'
 
         self.data: dict[tuple[bool, int], 'TrieNode'] = {}
 
@@ -185,7 +209,7 @@ class Trie:
         return convert_nodes(self.data)
 
     def dump_file(self, file_path: str, *args, **kwargs):
-        with open(mkpath(file_path), 'wb') as file_obj:
+        with open(mkpath(file_path), 'wb+') as file_obj:
             self.dump(file_obj, *args, **kwargs)  # type: ignore[arg-type]
 
     @classmethod
@@ -252,10 +276,10 @@ if __name__ == '__main__':
     # trie.add('one'.split())  # noqa
     # trie.add('one two'.split())  # noqa
 
-    # trie.add('lorem ipsum dolor adipiscing'.split())  # noqa
-    # trie.add('lorem ipsum dolor sit'.split())  # noqa
-    # trie.add('lorem ipsum dolor sit'.split())  # noqa
-    # trie.add('lorem ipsum dolor sit'.split())  # noqa
+    trie.add('lorem ipsum dolor adipiscing'.split())  # noqa
+    trie.add('lorem ipsum dolor sit'.split())  # noqa
+    trie.add('lorem ipsum dolor sit'.split())  # noqa
+    trie.add('lorem ipsum dolor sit'.split())  # noqa
     trie.add('lorem ipsum dolor sit'.split())  # noqa
     # trie.add('ipsum dolor sit amet'.split())  # noqa
     # trie.add('dolor sit amet consectetur'.split())  # noqa
