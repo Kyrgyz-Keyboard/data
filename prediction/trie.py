@@ -38,12 +38,16 @@ TrieNodeRepr = tuple[int, dict[str, 'TrieNodeRepr']]
 RETURN_MARKER = 1 << 7
 STEM_MARKER = 1 << 6
 
+INFINITY = int(1e9)
 
-def _cut_by_freq(node: TrieNode, min_freq: int = 0) -> int:
+
+def _prepare(node: TrieNode, words_used: set[int], min_freq: int = 0, max_results: int = INFINITY):
+    # Step 1: Remove nodes with freq < min_freq
+
     to_remove = []
 
     for key, next_node in node[1].items():
-        _cut_by_freq(next_node, min_freq)
+        _prepare(next_node, words_used, min_freq, max_results)
         node[0] += next_node[0]
         if next_node[0] < min_freq:
             to_remove.append(key)
@@ -51,26 +55,51 @@ def _cut_by_freq(node: TrieNode, min_freq: int = 0) -> int:
     for key in to_remove:
         del node[1][key]
 
+    # Step 2: Remove eccessive nodes, keep at least max_results nodes (non-stem!)
+
+    # Sort frequences for non-stem and empty nodes
+    tmp_freq = sorted((
+        freq
+        for (is_stem, _), (freq, next_node_children) in node[1].items()
+        if not is_stem and not next_node_children
+    ))
+    if max_results < len(tmp_freq):
+        tmp_freq_threshold = tmp_freq[-max_results]
+
+        to_remove = []
+        for (is_stem, word_index), (freq, next_node_children) in node[1].items():
+            if not is_stem and not next_node_children and freq < tmp_freq_threshold:
+                to_remove.append((is_stem, word_index))
+
+        for key in to_remove:
+            del node[1][key]
+
+    # Step 3: Record words that are left
+
+    for key in node[1].keys():
+        words_used.add(key[1])
+
 
 def _dump(
     cur_data: dict[tuple[bool, int], 'TrieNode'],
     file_obj: BytesIO,
+    new_index_mapping: dict[int, int],
     layer: int = 1
 ):
-    for (is_stem, word_index), (_, next_node) in sorted(
+    for (is_stem, word_index), (freq, next_node) in sorted(
         cur_data.items(),
         key=lambda x: x[1][0],
         reverse=True
     ):
-        byte_repr = bytearray(struct.pack('>I', word_index)[1:])
+        byte_repr = bytearray(struct.pack('>I', new_index_mapping[word_index])[1:])
         # Set first bit of the first byte of byte_repr to 1 if is_stem else 0:
         if is_stem:
             byte_repr[0] |= STEM_MARKER
 
         file_obj.write(byte_repr)
-        # file_obj.write(struct.pack('>I', freq))
+        file_obj.write(struct.pack('>I', freq))
         if layer < Trie.MAX_LAYERS:
-            _dump(next_node, file_obj, layer + 1)
+            _dump(next_node, file_obj, new_index_mapping, layer + 1)
 
     # pos = file_obj.tell()
     # return_amount = 1
@@ -105,9 +134,9 @@ def _load(
 
         word_index = struct.unpack('>I', b'\x00' + bytes([word_index_byte1[0] & ~STEM_MARKER]) + file_obj.read(2))[0]
 
-        # freq = struct.unpack('>I', file_obj.read(4))[0]
-        # next_node = [freq, {}]
-        next_node: TrieNode = [0, {}]
+        freq = struct.unpack('>I', file_obj.read(4))[0]
+        next_node: TrieNode = [freq, {}]
+        # next_node: TrieNode = [0, {}]
         cur_data[(is_stem, word_index)] = next_node
         if layer < Trie.MAX_LAYERS:
             _load(next_node[1], file_obj, layer + 1)
@@ -120,7 +149,6 @@ def _load(
 
 class Trie:
     MAX_LAYERS = 4
-    LAST_LAYER_MAX_SIZE = 3  # a.k.a predictions
 
     def __init__(self, all_words: Iterable[str], apertium_mapper: dict[str, str] | None = None):
         self.apertium_mapper = apertium_mapper or {}
@@ -135,8 +163,8 @@ class Trie:
 
         words_count_bits = ceil(log2(len(self.words_indexed)))
         # Reserved bits: 3
-        # 24 - 3 = 21
-        assert words_count_bits <= 21, f'Words count should be not more than 22 bits: currently {words_count_bits} bits'
+        # 24 - 2 = 22
+        assert words_count_bits <= 22, f'Words count should be not more than 22 bits: currently {words_count_bits} bits'
         print(f'Trie intialized with {len(self.words_indexed):,d} words ({ceil(log2(len(self.words_indexed)))} bits)')
 
         assert Trie.MAX_LAYERS < 128, 'Max layers should be less than 128 for the return counter to work'
@@ -164,21 +192,11 @@ class Trie:
 
             cur_data.setdefault((False, self.words_indexed[words[-1]]), [0, {}])[0] += 1
 
-    def dump(self, file_obj: BytesIO, freq_threshold: int = 0):
-        # Write the amounf of words
-        file_obj.write(struct.pack('>I', len(self.words_indexed))[1:])
-
-        # Write the words list
-        for word in self.words_indexed:
-            for letter in word:
-                file_obj.write(ENCODING_TABLE[letter])
-            file_obj.write(b'\x00')
-
-        print(len(self.data))
-
-        # Calculate total frequencies
-        print('Calculating total frequencies...')
-        _cut_by_freq([0, self.data], freq_threshold)
+    def dump(self, file_obj: BytesIO, min_freq: int = 0, max_results: int = 5):
+        print('Preparing trie for dumping...')
+        words_used: set[int] = set()
+        _prepare([0, self.data], words_used, min_freq, max_results)
+        print(f'Words used: {len(words_used):,d}/{len(self.words_indexed):,d}')
 
         print('Removing empty second layers...')
         to_remove = []
@@ -188,11 +206,22 @@ class Trie:
         for key in to_remove:
             del self.data[key]
 
-        print(len(self.data))
+        print('Generating new index mapping...')
+        new_index_mapping = {
+            old_index: new_index
+            for new_index, old_index in enumerate(words_used)
+        }
+
+        print('Dumping words...')
+        file_obj.write(struct.pack('>I', len(words_used))[1:])
+        for word in words_used:
+            for letter in self.words_indexed_reverse[word]:
+                file_obj.write(ENCODING_TABLE[letter])
+            file_obj.write(b'\x00')
 
         # Write the trie
-        print('Dumping...')
-        _dump(self.data, file_obj)
+        print('Dumping trie...')
+        _dump(self.data, file_obj, new_index_mapping)
 
     @classmethod
     def load(cls, file_obj: BytesIO) -> 'Trie':
@@ -236,7 +265,7 @@ class Trie:
         words: list[tuple[str, str]],
         max_results: int = 10,
         log_enabled: bool = False
-    ) -> Generator[tuple[bool, str], None, None]:
+    ) -> Generator[tuple[int, int, bool, str], None, None]:
 
         def log(*args, **kwargs):
             if log_enabled:
@@ -244,17 +273,16 @@ class Trie:
 
         def fetch_inner(
             cur_data: dict[tuple[bool, int], 'TrieNode'],
-            start_index: int,
-        ) -> Generator[tuple[bool, int], None, None]:
-            word, apertium_word = words[start_index]
+            start_index: int
+        ) -> Generator[tuple[tuple[bool, int], int], None, None]:
 
-            if start_index == len(words) - 1:
-                if (False, self.words_indexed[word]) in cur_data:
-                    log(f'Word found on last layer: "{word}"')
-                    yield from cur_data[(False, self.words_indexed[word])][1].keys()
-                else:
-                    log(f'Word not found on last layer: "{word}"')
+            if start_index == len(words):
+                print('Results:', [(key, freq) for key, (freq, _) in cur_data.items()])
+                for key, (freq, _) in cur_data.items():
+                    yield key, freq
                 return
+
+            word, apertium_word = words[start_index]
 
             if apertium_word in self.words_indexed:
                 if (True, self.words_indexed[apertium_word]) in cur_data:
@@ -270,48 +298,48 @@ class Trie:
 
             if word in self.words_indexed:
                 if (False, self.words_indexed[word]) in cur_data:
-                    log(f'Word found on layer: "{word}"')
+                    log(f'Word found on layer (normal): "{word}"')
                     yield from fetch_inner(
                         cur_data[(False, self.words_indexed[word])][1],
                         start_index + 1
                     )
                 else:
-                    log(f'Word not found on layer: "{word}"')
+                    log(f'Word not found on layer (normal): "{word}"')
             else:
                 log(f'Unknown word: "{word}"')
 
-        raw_results = []
+        raw_results: list[tuple[int, int, bool, int]] = []
         for layers_num in range(min(len(words) + 1, Trie.MAX_LAYERS), 1, -1):
             log(layers_num, len(words) - layers_num + 1)
             raw_results.extend(
-                (layers_num, is_stem, prediction)
-                for is_stem, prediction in fetch_inner(self.data, len(words) - layers_num + 1)
+                (layers_num, freq, is_stem, prediction)
+                for (is_stem, prediction), freq in fetch_inner(self.data, len(words) - layers_num + 1)
             )
 
         # Results are naturally sorted by descending path length and then by descending frequency
-        distinct_results = set()
+        distinct_results: set[tuple[bool, str]] = set()
 
         # First yield not stems
-        for layers_num, is_stem, prediction in raw_results:
+        for layers_num, freq, is_stem, prediction in raw_results:
             if len(distinct_results) == max_results:
-                break
-            if not is_stem and (is_stem, self.words_indexed_reverse[prediction]) not in distinct_results:
-                distinct_results.add((is_stem, self.words_indexed_reverse[prediction]))
-                yield (layers_num, is_stem, self.words_indexed_reverse[prediction])
+                return
+            if not is_stem and (False, self.words_indexed_reverse[prediction]) not in distinct_results:
+                distinct_results.add((False, self.words_indexed_reverse[prediction]))
+                yield (layers_num, freq, False, self.words_indexed_reverse[prediction])
 
         # Then yeild stems
-        for layers_num, is_stem, prediction in raw_results:
+        for layers_num, freq, is_stem, prediction in raw_results:
             if len(distinct_results) == max_results:
-                break
-            if is_stem and (is_stem, self.words_indexed_reverse[prediction]) not in distinct_results:
-                distinct_results.add((is_stem, self.words_indexed_reverse[prediction]))
-                yield (layers_num, is_stem, self.words_indexed_reverse[prediction])
+                return
+            if is_stem and (True, self.words_indexed_reverse[prediction]) not in distinct_results:
+                distinct_results.add((True, self.words_indexed_reverse[prediction]))
+                yield (layers_num, freq, True, self.words_indexed_reverse[prediction])
 
-    def encode_word(self, word: str) -> int:
+    def word2index(self, word: str) -> int:
         return self.words_indexed[word]
 
-    def decode_word(self, word_index: int) -> str:
-        return self.get_words_indexed_reverse()[word_index]
+    def index2word(self, word_index: int) -> str:
+        return self.words_indexed_reverse[word_index]
 
 
 if __name__ == '__main__':
@@ -322,7 +350,7 @@ if __name__ == '__main__':
     file_obj = BytesIO()
 
     trie = Trie(
-        ['lorem', 'ipsum', 'dolor', 'sit', 'amet', 'consectetur', 'adipiscing', 'elit'],
+        ['lorem', 'ipsum', 'dolor', 'sit', 'amet', 'consectetur', 'adipiscing', 'elit', 'aloha', 'hola'],
         {
             'ipsum': 'ip',
             'sit': 'si'
@@ -332,7 +360,7 @@ if __name__ == '__main__':
     # trie.add('one'.split())  # noqa
     # trie.add('one two'.split())  # noqa
 
-    trie.add('lorem ipsum dolor adipiscing'.split())  # noqa
+    # trie.add('lorem ipsum dolor adipiscing'.split())  # noqa
     trie.add('lorem ipsum dolor sit'.split())  # noqa
     trie.add('lorem ipsum dolor sit'.split())  # noqa
     trie.add('lorem ipsum dolor sit'.split())  # noqa
@@ -342,9 +370,19 @@ if __name__ == '__main__':
     # trie.add('sit amet consectetur adipiscing'.split())  # noqa
     # trie.add('amet consectetur adipiscing elit'.split())  # noqa
 
+    trie.add('lorem ipsum aloha'.split())  # noqa
+    trie.add('lorem ipsum aloha'.split())  # noqa
+    trie.add('lorem ipsum aloha'.split())  # noqa
+    # trie.add('lorem ipsum aloha'.split())  # noqa
+
+    trie.add('lorem ipsum hola'.split())  # noqa
+    trie.add('lorem ipsum hola'.split())  # noqa
+    trie.add('lorem ipsum hola'.split())  # noqa
+    trie.add('lorem ipsum hola'.split())  # noqa
+
     # print(json.dumps(trie.get_data(), indent=4, ensure_ascii=False))
 
-    trie.dump(file_obj, 0)
+    trie.dump(file_obj, min_freq=0, max_results=1)
 
     file_obj.seek(0)
 

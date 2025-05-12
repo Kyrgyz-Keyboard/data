@@ -33,7 +33,8 @@ def main(request: str):
     print(f'Trie knows about {len(trie.words_indexed):,d} words')
 
     words = list(map(str.lower, request.split()))
-    print('Request:', words)
+    words_with_stem = [(word, get_stem(word) or word) for word in words]
+    print('Request:', words_with_stem)
 
     # if 'covid (False)' in trie.get_data():
     #     print(trie.get_data()['covid (False)'])
@@ -47,12 +48,11 @@ def main(request: str):
     # print()
 
     # print(list(map(lambda item: trie.words_indexed_reverse[item[1]], trie.data.keys())))
-    print(len(trie.data))
+    # print(trie.get_data(
+    #     trie.data[(False, trie.word2index('covid'))][1]
+    # ))
 
-    for start_index in range(len(words)):
-        print(words[start_index:], list(trie.fetch([
-            (word, get_stem(word) or word) for word in words[start_index:]
-        ], log_enabled=True)))
+    print(words_with_stem, list(trie.fetch(words_with_stem, log_enabled=True)))
 
 
 if __name__ == '__main__':
@@ -67,3 +67,4 @@ if __name__ == '__main__':
     # main('Мен бүгүн дүкөнгө')
     main('COVID 19')
     # main('жаңылыктар')
+    # main('Президент өзүнүн бийлигин уламдан улам бекитип')
