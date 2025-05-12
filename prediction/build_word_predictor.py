@@ -65,10 +65,9 @@ def build_trie():
         for line in map(str.strip, filter(None, file)):
             if ' ' in line:
                 key, value = map(str.lower, line.split(' '))
-                allowed_words.add(value)
                 apertium_mapper[key] = value
 
-    print(f'Allowed words (with apertium values): {len(allowed_words):,d}')
+    print(f'Apertium Mapper: {len(apertium_mapper):,d} -> {len(set(apertium_mapper.values())):,d}')
 
     print('Preparation done')
     print()
