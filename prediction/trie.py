@@ -2,6 +2,7 @@ from typing import Sequence, Iterable, Generator
 
 from math import log2, ceil
 from io import BytesIO
+import itertools
 import struct
 import sys
 
@@ -38,24 +39,26 @@ RETURN_MARKER = 1 << 7
 STEM_MARKER = 1 << 6
 
 
-def _calc_total_freq(node: TrieNode):
-    for next_node in node[1].values():
-        _calc_total_freq(next_node)
+def _cut_by_freq(node: TrieNode, min_freq: int = 0) -> int:
+    to_remove = []
+
+    for key, next_node in node[1].items():
+        _cut_by_freq(next_node, min_freq)
         node[0] += next_node[0]
+        if next_node[0] < min_freq:
+            to_remove.append(key)
+
+    for key in to_remove:
+        del node[1][key]
 
 
 def _dump(
     cur_data: dict[tuple[bool, int], 'TrieNode'],
     file_obj: BytesIO,
-    freq_threshold: int,
     layer: int = 1
 ):
     for (is_stem, word_index), (_, next_node) in sorted(
-        (
-            item
-            for item in cur_data.items()
-            if item[1][0] >= freq_threshold
-        ),
+        cur_data.items(),
         key=lambda x: x[1][0],
         reverse=True
     ):
@@ -67,34 +70,36 @@ def _dump(
         file_obj.write(byte_repr)
         # file_obj.write(struct.pack('>I', freq))
         if layer < Trie.MAX_LAYERS:
-            _dump(next_node, file_obj, freq_threshold, layer + 1)
+            _dump(next_node, file_obj, layer + 1)
 
-    pos = file_obj.tell()
-    return_amount = 1
-    if pos:
-        file_obj.seek(pos - 1)
-        last_byte = file_obj.read(1)
+    # pos = file_obj.tell()
+    # return_amount = 1
+    # if pos:
+    #     file_obj.seek(pos - 1)
+    #     last_byte = file_obj.read(1)
 
-        if last_byte[0] & RETURN_MARKER:  # Is return marker
-            val = last_byte[0] & ~RETURN_MARKER
-            return_amount = val + 1
-            file_obj.seek(pos - 1)
-        else:
-            file_obj.seek(pos)
+    #     if last_byte[0] & RETURN_MARKER:  # Is return marker
+    #         val = last_byte[0] & ~RETURN_MARKER
+    #         return_amount = val + 1
+    #         file_obj.seek(pos - 1)
+    #     else:
+    #         file_obj.seek(pos)
 
-    file_obj.write(bytes([RETURN_MARKER | return_amount]))  # New return marker
+    # file_obj.write(bytes([RETURN_MARKER | return_amount]))  # New return marker
+
+    file_obj.write(RETURN_MARKER.to_bytes(1, 'big'))  # New return marker
 
 
 def _load(
     cur_data: dict[tuple[bool, int], 'TrieNode'],
     file_obj: BytesIO,
     layer: int = 1
-) -> int:
+):
     while (word_index_byte1 := file_obj.read(1)):
-        is_return = bool(word_index_byte1[0] & RETURN_MARKER)
-        if is_return:
-            how_much_return = int.from_bytes(word_index_byte1, 'big') & ~RETURN_MARKER
-            return how_much_return - 1
+        if word_index_byte1[0] & RETURN_MARKER:
+            # how_much_return = word_index_byte1[0] & ~RETURN_MARKER
+            # return how_much_return - 1
+            return
 
         is_stem = bool(word_index_byte1[0] & STEM_MARKER)
 
@@ -105,11 +110,12 @@ def _load(
         next_node: TrieNode = [0, {}]
         cur_data[(is_stem, word_index)] = next_node
         if layer < Trie.MAX_LAYERS:
-            how_much_return = _load(next_node[1], file_obj, layer + 1)
-            if how_much_return:
-                return how_much_return - 1
+            _load(next_node[1], file_obj, layer + 1)
+            # how_much_return = _load(next_node[1], file_obj, layer + 1)
+            # if how_much_return:
+            #     return how_much_return - 1
 
-    return 0
+    # return 0
 
 
 class Trie:
@@ -117,11 +123,15 @@ class Trie:
     LAST_LAYER_MAX_SIZE = 3  # a.k.a predictions
 
     def __init__(self, all_words: Iterable[str], apertium_mapper: dict[str, str] | None = None):
+        self.apertium_mapper = apertium_mapper or {}
         self.words_indexed: dict[str, int] = {
             word: index
-            for index, word in enumerate(all_words)
+            for index, word in enumerate(itertools.chain(all_words, self.apertium_mapper.values()))
         }
-        self.apertium_mapper = apertium_mapper or {}
+        self.words_indexed_reverse: dict[int, str] = {
+            index: word
+            for word, index in self.words_indexed.items()
+        }
 
         words_count_bits = ceil(log2(len(self.words_indexed)))
         # Reserved bits: 3
@@ -164,13 +174,25 @@ class Trie:
                 file_obj.write(ENCODING_TABLE[letter])
             file_obj.write(b'\x00')
 
+        print(len(self.data))
+
         # Calculate total frequencies
         print('Calculating total frequencies...')
-        _calc_total_freq([0, self.data])
+        _cut_by_freq([0, self.data], freq_threshold)
+
+        print('Removing empty second layers...')
+        to_remove = []
+        for key, next_node in self.data.items():
+            if not next_node[1]:
+                to_remove.append(key)
+        for key in to_remove:
+            del self.data[key]
+
+        print(len(self.data))
 
         # Write the trie
         print('Dumping...')
-        _dump(self.data, file_obj, freq_threshold)
+        _dump(self.data, file_obj)
 
     @classmethod
     def load(cls, file_obj: BytesIO) -> 'Trie':
@@ -194,19 +216,11 @@ class Trie:
 
     # Helper functions (slow):
 
-    def get_words_indexed_reverse(self) -> dict[int, str]:
-        return {index: word for word, index in self.words_indexed.items()}
-
-    def get_data(self) -> dict[str, 'TrieNodeRepr']:
-        words_indexed_reverse = self.get_words_indexed_reverse()
-
-        def convert_nodes(children: dict[tuple[bool, int], 'TrieNode']) -> dict[str, 'TrieNodeRepr']:
-            return {
-                words_indexed_reverse[word_index] + f' ({is_stem})': (child[0], convert_nodes(child[1]))
-                for (is_stem, word_index), child in children.items()
-            }
-
-        return convert_nodes(self.data)
+    def get_data(self, data: dict[tuple[bool, int], 'TrieNode'] | None = None) -> dict[str, 'TrieNodeRepr']:
+        return {
+            self.words_indexed_reverse[word_index] + f' ({is_stem})': (child[0], self.get_data(child[1]))
+            for (is_stem, word_index), child in (data if data is not None else self.data).items()
+        }
 
     def dump_file(self, file_path: str, *args, **kwargs):
         with open(mkpath(file_path), 'wb+') as file_obj:
@@ -217,39 +231,81 @@ class Trie:
         with open(mkpath(file_path), 'rb') as file_obj:
             return cls.load(file_obj, *args, **kwargs)  # type: ignore[arg-type]
 
-    def fetch(self, words: list[str], max_results: int = 10) -> Generator[tuple[bool, str], None, None]:
-        words_indexed_reverse = self.get_words_indexed_reverse()
+    def fetch(
+        self,
+        words: list[tuple[str, str]],
+        max_results: int = 10,
+        log_enabled: bool = False
+    ) -> Generator[tuple[bool, str], None, None]:
 
-        cur_data = self.data
+        def log(*args, **kwargs):
+            if log_enabled:
+                print(*args, **kwargs)
 
-        for word in words:
-            if word not in self.words_indexed:
-                print(f'Word "{word}" not found')
+        def fetch_inner(
+            cur_data: dict[tuple[bool, int], 'TrieNode'],
+            start_index: int,
+        ) -> Generator[tuple[bool, int], None, None]:
+            word, apertium_word = words[start_index]
+
+            if start_index == len(words) - 1:
+                if (False, self.words_indexed[word]) in cur_data:
+                    log(f'Word found on last layer: "{word}"')
+                    yield from cur_data[(False, self.words_indexed[word])][1].keys()
+                else:
+                    log(f'Word not found on last layer: "{word}"')
                 return
 
-            if (False, self.words_indexed[word]) in cur_data:
-                cur_data = cur_data[(False, self.words_indexed[word])][1]
-            elif (True, self.words_indexed[word]) in cur_data:
-                cur_data = cur_data[(True, self.words_indexed[word])][1]
+            if apertium_word in self.words_indexed:
+                if (True, self.words_indexed[apertium_word]) in cur_data:
+                    log(f'Word found on layer (apertium): "{apertium_word}"')
+                    yield from fetch_inner(
+                        cur_data[(True, self.words_indexed[apertium_word])][1],
+                        start_index + 1
+                    )
+                else:
+                    log(f'Word not found on layer (apertium): "{apertium_word}"')
             else:
-                print(f'Word "{word}" not found as a step')
-                return
+                log(f'Unknown word (apertium): "{apertium_word}"')
 
-        results = 0
+            if word in self.words_indexed:
+                if (False, self.words_indexed[word]) in cur_data:
+                    log(f'Word found on layer: "{word}"')
+                    yield from fetch_inner(
+                        cur_data[(False, self.words_indexed[word])][1],
+                        start_index + 1
+                    )
+                else:
+                    log(f'Word not found on layer: "{word}"')
+            else:
+                log(f'Unknown word: "{word}"')
 
-        for is_stem, prediction in cur_data.keys():
-            if results == max_results:
+        raw_results = []
+        for layers_num in range(min(len(words) + 1, Trie.MAX_LAYERS), 1, -1):
+            log(layers_num, len(words) - layers_num + 1)
+            raw_results.extend(
+                (layers_num, is_stem, prediction)
+                for is_stem, prediction in fetch_inner(self.data, len(words) - layers_num + 1)
+            )
+
+        # Results are naturally sorted by descending path length and then by descending frequency
+        distinct_results = set()
+
+        # First yield not stems
+        for layers_num, is_stem, prediction in raw_results:
+            if len(distinct_results) == max_results:
                 break
-            if not is_stem:
-                yield (is_stem, words_indexed_reverse[prediction])
-                results += 1
+            if not is_stem and (is_stem, self.words_indexed_reverse[prediction]) not in distinct_results:
+                distinct_results.add((is_stem, self.words_indexed_reverse[prediction]))
+                yield (layers_num, is_stem, self.words_indexed_reverse[prediction])
 
-        for is_stem, prediction in cur_data.keys():
-            if results == max_results:
+        # Then yeild stems
+        for layers_num, is_stem, prediction in raw_results:
+            if len(distinct_results) == max_results:
                 break
-            if is_stem:
-                yield (is_stem, words_indexed_reverse[prediction])
-                results += 1
+            if is_stem and (is_stem, self.words_indexed_reverse[prediction]) not in distinct_results:
+                distinct_results.add((is_stem, self.words_indexed_reverse[prediction]))
+                yield (layers_num, is_stem, self.words_indexed_reverse[prediction])
 
     def encode_word(self, word: str) -> int:
         return self.words_indexed[word]
@@ -266,7 +322,7 @@ if __name__ == '__main__':
     file_obj = BytesIO()
 
     trie = Trie(
-        ['lorem', 'ipsum', 'dolor', 'sit', 'amet', 'consectetur', 'adipiscing', 'elit'] + ['ip', 'si'],
+        ['lorem', 'ipsum', 'dolor', 'sit', 'amet', 'consectetur', 'adipiscing', 'elit'],
         {
             'ipsum': 'ip',
             'sit': 'si'
@@ -288,7 +344,7 @@ if __name__ == '__main__':
 
     # print(json.dumps(trie.get_data(), indent=4, ensure_ascii=False))
 
-    trie.dump(file_obj)
+    trie.dump(file_obj, 0)
 
     file_obj.seek(0)
 
@@ -296,3 +352,16 @@ if __name__ == '__main__':
     # print(new_trie.data)
 
     print(json.dumps(new_trie.get_data(), indent=4, ensure_ascii=False))
+
+    print(list(new_trie.fetch([
+        ('lorem', 'lorem'),
+        ('lorem', 'lorem'),
+        ('lorem', 'lorem'),
+        ('lorem', 'lorem'),
+        ('ipsum', 'ip'),
+        ('dolor', 'dolor')
+    ], log_enabled=False)))
+
+    # print(list(new_trie.fetch([
+    #     ('lorem', 'lorem'),
+    # ], log_enabled=False)))

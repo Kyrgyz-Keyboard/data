@@ -1,5 +1,7 @@
 import sys
 
+import apertium
+
 if __name__ == '__main__':
     sys.path.append('../')
 
@@ -7,6 +9,21 @@ from src.utils import PathMagic
 mkpath = PathMagic(__file__)
 
 from prediction.trie import Trie
+
+
+analyzer = apertium.Analyzer('kir')
+
+
+def get_stem(word: str) -> str | None:
+    bases = []
+    for reading in analyzer.analyze(word)[0].readings:
+        cur_base = reading[0].baseform.replace(' ', '')
+        if '/' not in cur_base and '\\' not in cur_base and cur_base[0] != '*':
+            bases.append(cur_base)
+
+    if bases:
+        return min(bases, key=lambda s: (len(s), s))
+    return None
 
 
 def main(request: str):
@@ -17,8 +34,6 @@ def main(request: str):
 
     words = list(map(str.lower, request.split()))
     print('Request:', words)
-
-    # print(trie.get_data())
 
     # if 'covid (False)' in trie.get_data():
     #     print(trie.get_data()['covid (False)'])
@@ -31,8 +46,13 @@ def main(request: str):
     #     print(trie.get_data()['19 (True)'])
     # print()
 
+    # print(list(map(lambda item: trie.words_indexed_reverse[item[1]], trie.data.keys())))
+    print(len(trie.data))
+
     for start_index in range(len(words)):
-        print(words[start_index:], list(trie.fetch(words[start_index:])))
+        print(words[start_index:], list(trie.fetch([
+            (word, get_stem(word) or word) for word in words[start_index:]
+        ], log_enabled=True)))
 
 
 if __name__ == '__main__':
