@@ -25,8 +25,9 @@ FINISH_AT_N_BYTES = 100 * 1024 * 1024  # 100 MB
 LOG_EVERY_N_BYTES = 10 * 1024 * 1024  # 10 MB
 
 
-WORD_FREQ_THRESHOLD = 10
+# WORD_FREQ_THRESHOLD = 10
 RESULT_FREQ_THRESHOLD = 3
+MAX_RESULTS = 5
 
 
 def size_to_str(size_bytes: int) -> str:
@@ -53,7 +54,7 @@ def build_trie():
     allowed_words: set[str] = {
         word
         for word, freq in word_freq.items()
-        if freq >= WORD_FREQ_THRESHOLD
+        # if freq >= WORD_FREQ_THRESHOLD
     }
     del word_freq
 
@@ -102,8 +103,8 @@ def build_trie():
             # if total_read_size >= FINISH_AT_N_BYTES:
             #     break
 
-    print('Writing trie to file...')
-    trie.dump_file(mkpath('../results/trie.bin'), RESULT_FREQ_THRESHOLD)
+    print()
+    trie.dump_file(mkpath('../results/trie.bin'), RESULT_FREQ_THRESHOLD, MAX_RESULTS)
 
     trie_size = os.path.getsize(mkpath('../results/trie.bin'))
     print(f'Trie size: {size_to_str(trie_size)}')
