@@ -41,13 +41,13 @@ STEM_MARKER = 1 << 6
 INFINITY = int(1e9)
 
 
-def _prepare(node: TrieNode, words_used: set[int], min_freq: int = 0, max_results: int = INFINITY):
+def _prepare(node: TrieNode, min_freq: int = 0, max_results: int = INFINITY):
     # Step 1: Remove nodes with freq < min_freq
 
     to_remove = []
 
     for key, next_node in node[1].items():
-        _prepare(next_node, words_used, min_freq, max_results)
+        _prepare(next_node, min_freq, max_results)
         node[0] += next_node[0]
         if next_node[0] < min_freq:
             to_remove.append(key)
@@ -55,7 +55,7 @@ def _prepare(node: TrieNode, words_used: set[int], min_freq: int = 0, max_result
     for key in to_remove:
         del node[1][key]
 
-    # Step 2: Remove eccessive nodes, keep at least max_results nodes (non-stem!)
+    # Step 2: Remove eccessive nodes, keep at least max_results non-stem nodes
 
     # Sort frequences for non-stem and empty nodes
     tmp_freq = sorted((
@@ -74,32 +74,26 @@ def _prepare(node: TrieNode, words_used: set[int], min_freq: int = 0, max_result
         for key in to_remove:
             del node[1][key]
 
-    # Step 3: Record words that are left
-
-    for key in node[1].keys():
-        words_used.add(key[1])
-
 
 def _dump(
     cur_data: dict[tuple[bool, int], 'TrieNode'],
     file_obj: BytesIO,
-    new_index_mapping: dict[int, int],
     layer: int = 1
 ):
-    for (is_stem, word_index), (freq, next_node) in sorted(
+    for (is_stem, word_index), (_, next_node) in sorted(
         cur_data.items(),
         key=lambda x: x[1][0],
         reverse=True
     ):
-        byte_repr = bytearray(struct.pack('>I', new_index_mapping[word_index])[1:])
+        byte_repr = bytearray(struct.pack('>I', word_index)[1:])
         # Set first bit of the first byte of byte_repr to 1 if is_stem else 0:
         if is_stem:
             byte_repr[0] |= STEM_MARKER
 
         file_obj.write(byte_repr)
-        file_obj.write(struct.pack('>I', freq))
+        # file_obj.write(struct.pack('>I', freq))
         if layer < Trie.MAX_LAYERS:
-            _dump(next_node, file_obj, new_index_mapping, layer + 1)
+            _dump(next_node, file_obj, layer + 1)
 
     # pos = file_obj.tell()
     # return_amount = 1
@@ -134,9 +128,9 @@ def _load(
 
         word_index = struct.unpack('>I', b'\x00' + bytes([word_index_byte1[0] & ~STEM_MARKER]) + file_obj.read(2))[0]
 
-        freq = struct.unpack('>I', file_obj.read(4))[0]
-        next_node: TrieNode = [freq, {}]
-        # next_node: TrieNode = [0, {}]
+        # freq = struct.unpack('>I', file_obj.read(4))[0]
+        # next_node: TrieNode = [freq, {}]
+        next_node: TrieNode = [0, {}]
         cur_data[(is_stem, word_index)] = next_node
         if layer < Trie.MAX_LAYERS:
             _load(next_node[1], file_obj, layer + 1)
@@ -194,11 +188,9 @@ class Trie:
 
     def dump(self, file_obj: BytesIO, min_freq: int = 0, max_results: int = 5):
         print('Preparing trie for dumping...')
-        words_used: set[int] = set()
-        _prepare([0, self.data], words_used, min_freq, max_results)
-        print(f'Words used: {len(words_used):,d}/{len(self.words_indexed):,d}')
+        _prepare([0, self.data], min_freq, max_results)
 
-        print('Removing empty second layers...')
+        print('Removing first layer nodes that have empty second layer...')
         to_remove = []
         for key, next_node in self.data.items():
             if not next_node[1]:
@@ -206,22 +198,16 @@ class Trie:
         for key in to_remove:
             del self.data[key]
 
-        print('Generating new index mapping...')
-        new_index_mapping = {
-            old_index: new_index
-            for new_index, old_index in enumerate(words_used)
-        }
-
         print('Dumping words...')
-        file_obj.write(struct.pack('>I', len(words_used))[1:])
-        for word in words_used:
-            for letter in self.words_indexed_reverse[word]:
+        file_obj.write(struct.pack('>I', len(self.words_indexed))[1:])
+        for word in self.words_indexed:
+            for letter in word:
                 file_obj.write(ENCODING_TABLE[letter])
             file_obj.write(b'\x00')
 
         # Write the trie
         print('Dumping trie...')
-        _dump(self.data, file_obj, new_index_mapping)
+        _dump(self.data, file_obj)
 
     @classmethod
     def load(cls, file_obj: BytesIO) -> 'Trie':
@@ -231,10 +217,10 @@ class Trie:
         # Read the words list
         words_indexed = []
         for _ in range(trie_size):
-            word = ''
+            word = []
             while (current_byte := file_obj.read(1)) != b'\x00':
-                word += DECODING_TABLE[current_byte]
-            words_indexed.append(word)
+                word.append(DECODING_TABLE[current_byte])
+            words_indexed.append(''.join(word))
 
         result = cls(words_indexed)
 
