@@ -2,8 +2,6 @@ from typing import Sequence, Iterable, Generator
 
 from math import log2, ceil
 from io import BytesIO
-import itertools
-import struct
 import sys
 
 if __name__ == '__main__':
@@ -38,16 +36,18 @@ TrieNodeRepr = tuple[int, dict[str, 'TrieNodeRepr']]
 RETURN_MARKER = 1 << 7
 STEM_MARKER = 1 << 6
 
+RETURN_MARKER_WHOLE = RETURN_MARKER << 16
+STEM_MARKER_WHOLE = STEM_MARKER << 16
+
 INFINITY = int(1e9)
 
 
-def _prepare(node: TrieNode, min_freq: int = 0, max_results: int = INFINITY):
+def _prepare(node: TrieNode, words_used: set[int], min_freq: int = 0, max_results: int = INFINITY):
     # Step 1: Remove nodes with freq < min_freq
 
     to_remove = []
-
     for key, next_node in node[1].items():
-        _prepare(next_node, min_freq, max_results)
+        _prepare(next_node, words_used, min_freq, max_results)
         node[0] += next_node[0]
         if next_node[0] < min_freq:
             to_remove.append(key)
@@ -74,10 +74,15 @@ def _prepare(node: TrieNode, min_freq: int = 0, max_results: int = INFINITY):
         for key in to_remove:
             del node[1][key]
 
+    # Step 3: Record used words
+    for (_, word_index) in node[1].keys():
+        words_used.add(word_index)
+
 
 def _dump(
     cur_data: dict[tuple[bool, int], 'TrieNode'],
     file_obj: BytesIO,
+    new_index_mapping: dict[int, int],
     layer: int = 1
 ):
     for (is_stem, word_index), (_, next_node) in sorted(
@@ -85,15 +90,15 @@ def _dump(
         key=lambda x: x[1][0],
         reverse=True
     ):
-        byte_repr = bytearray(struct.pack('>I', word_index)[1:])
         # Set first bit of the first byte of byte_repr to 1 if is_stem else 0:
+        word_index = new_index_mapping[word_index]
         if is_stem:
-            byte_repr[0] |= STEM_MARKER
+            word_index |= STEM_MARKER_WHOLE
 
-        file_obj.write(byte_repr)
-        # file_obj.write(struct.pack('>I', freq))
+        file_obj.write(int.to_bytes(word_index, 3, 'big'))
+        # file_obj.write(int.to_bytes(freq, 4, 'big'))
         if layer < Trie.MAX_LAYERS:
-            _dump(next_node, file_obj, layer + 1)
+            _dump(next_node, file_obj, new_index_mapping, layer + 1)
 
     # pos = file_obj.tell()
     # return_amount = 1
@@ -113,42 +118,46 @@ def _dump(
     file_obj.write(RETURN_MARKER.to_bytes(1, 'big'))  # New return marker
 
 
-def _load(
-    cur_data: dict[tuple[bool, int], 'TrieNode'],
-    file_obj: BytesIO,
-    layer: int = 1
-):
-    while (word_index_byte1 := file_obj.read(1)):
-        if word_index_byte1[0] & RETURN_MARKER:
-            # how_much_return = word_index_byte1[0] & ~RETURN_MARKER
-            # return how_much_return - 1
-            return
+# def _load(
+#     cur_data: dict[tuple[bool, int], 'TrieNode'],
+#     file_obj: BytesIO,
+#     layer: int = 1
+# ):
+#     while (word_index_byte1 := file_obj.read(1)):
+#         if word_index_byte1[0] & RETURN_MARKER:
+#             # how_much_return = word_index_byte1[0] & ~RETURN_MARKER
+#             # return how_much_return - 1
+#             return
 
-        is_stem = bool(word_index_byte1[0] & STEM_MARKER)
+#         is_stem = bool(word_index_byte1[0] & STEM_MARKER)
 
-        word_index = struct.unpack('>I', b'\x00' + bytes([word_index_byte1[0] & ~STEM_MARKER]) + file_obj.read(2))[0]
+#         word_index = struct.unpack('>I', b'\x00' + bytes([word_index_byte1[0] & ~STEM_MARKER]) + file_obj.read(2))[0]
 
-        # freq = struct.unpack('>I', file_obj.read(4))[0]
-        # next_node: TrieNode = [freq, {}]
-        next_node: TrieNode = [0, {}]
-        cur_data[(is_stem, word_index)] = next_node
-        if layer < Trie.MAX_LAYERS:
-            _load(next_node[1], file_obj, layer + 1)
-            # how_much_return = _load(next_node[1], file_obj, layer + 1)
-            # if how_much_return:
-            #     return how_much_return - 1
+#         # freq = struct.unpack('>I', file_obj.read(4))[0]
+#         # next_node: TrieNode = [freq, {}]
+#         next_node: TrieNode = [0, {}]
+#         cur_data[(is_stem, word_index)] = next_node
+#         if layer < Trie.MAX_LAYERS:
+#             _load(next_node[1], file_obj, layer + 1)
+#             # how_much_return = _load(next_node[1], file_obj, layer + 1)
+#             # if how_much_return:
+#             #     return how_much_return - 1
 
-    # return 0
+#     # return 0
 
 
 class Trie:
     MAX_LAYERS = 4
 
-    def __init__(self, all_words: Iterable[str], apertium_mapper: dict[str, str] | None = None):
+    def __init__(
+        self,
+        all_words: Iterable[str],
+        apertium_mapper: dict[str, str] | None = None
+    ):
         self.apertium_mapper = apertium_mapper or {}
         self.words_indexed: dict[str, int] = {
             word: index
-            for index, word in enumerate(itertools.chain(all_words, self.apertium_mapper.values()))
+            for index, word in enumerate(all_words)
         }
         self.words_indexed_reverse: dict[int, str] = {
             index: word
@@ -188,7 +197,10 @@ class Trie:
 
     def dump(self, file_obj: BytesIO, min_freq: int = 0, max_results: int = 5):
         print('Preparing trie for dumping...')
-        _prepare([0, self.data], min_freq, max_results)
+        words_used: set[int] = set()
+        _prepare([0, self.data], words_used, min_freq, max_results)
+
+        print('Words used: ', len(words_used))
 
         print('Removing first layer nodes that have empty second layer...')
         to_remove = []
@@ -198,21 +210,27 @@ class Trie:
         for key in to_remove:
             del self.data[key]
 
+        print('Generating new index mapping...')
+        new_index_mapping = {
+            old_index: new_index
+            for new_index, old_index in enumerate(words_used)
+        }
+
         print('Dumping words...')
-        file_obj.write(struct.pack('>I', len(self.words_indexed))[1:])
-        for word in self.words_indexed:
-            for letter in word:
+        file_obj.write(len(words_used).to_bytes(3, 'big'))
+        for word in words_used:
+            for letter in self.words_indexed_reverse[word]:
                 file_obj.write(ENCODING_TABLE[letter])
             file_obj.write(b'\x00')
 
         # Write the trie
         print('Dumping trie...')
-        _dump(self.data, file_obj)
+        _dump(self.data, file_obj, new_index_mapping)
 
     @classmethod
     def load(cls, file_obj: BytesIO) -> 'Trie':
         # Read the amount of words
-        trie_size = struct.unpack('>I', b'\x00' + file_obj.read(3))[0]
+        trie_size = int.from_bytes(file_obj.read(3), 'big')
 
         # Read the words list
         words_indexed = []
@@ -225,7 +243,27 @@ class Trie:
         result = cls(words_indexed)
 
         # Read the trie
-        _load(result.data, file_obj)
+        stack = [(result.data, 1)]
+        while stack:
+            cur_data, layer = stack[-1]
+
+            while True:
+                word_index_byte1 = file_obj.read(1)[0]
+
+                if word_index_byte1 & RETURN_MARKER:
+                    stack.pop()
+                    break
+
+                is_stem = bool(word_index_byte1 & STEM_MARKER)
+                word_index = ((word_index_byte1 & ~STEM_MARKER) << 16) | int.from_bytes(file_obj.read(2), 'big')
+
+                # freq = int.from_bytes(file_obj.read(4), 'big')
+                # next_node: TrieNode = [freq, {}]
+                next_node: TrieNode = [0, {}]
+                cur_data[(is_stem, word_index)] = next_node
+                if layer < Trie.MAX_LAYERS:
+                    stack.append((next_node[1], layer + 1))
+                    break
 
         return result
 
@@ -346,7 +384,7 @@ if __name__ == '__main__':
     # trie.add('one'.split())  # noqa
     # trie.add('one two'.split())  # noqa
 
-    # trie.add('lorem ipsum dolor adipiscing'.split())  # noqa
+    trie.add('lorem ipsum dolor adipiscing'.split())  # noqa
     trie.add('lorem ipsum dolor sit'.split())  # noqa
     trie.add('lorem ipsum dolor sit'.split())  # noqa
     trie.add('lorem ipsum dolor sit'.split())  # noqa
@@ -368,7 +406,7 @@ if __name__ == '__main__':
 
     # print(json.dumps(trie.get_data(), indent=4, ensure_ascii=False))
 
-    trie.dump(file_obj, min_freq=0, max_results=1)
+    trie.dump(file_obj, min_freq=0, max_results=100)
 
     file_obj.seek(0)
 

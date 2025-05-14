@@ -1,6 +1,6 @@
 import sys
 
-import apertium
+# import apertium
 
 if __name__ == '__main__':
     sys.path.append('../')
@@ -11,19 +11,19 @@ mkpath = PathMagic(__file__)
 from prediction.trie import Trie
 
 
-analyzer = apertium.Analyzer('kir')
+# analyzer = apertium.Analyzer('kir')
 
 
-def get_stem(word: str) -> str | None:
-    bases = []
-    for reading in analyzer.analyze(word)[0].readings:
-        cur_base = reading[0].baseform.replace(' ', '')
-        if '/' not in cur_base and '\\' not in cur_base and cur_base[0] != '*':
-            bases.append(cur_base)
+# def get_stem(word: str) -> str | None:
+#     bases = []
+#     for reading in analyzer.analyze(word)[0].readings:
+#         cur_base = reading[0].baseform.replace(' ', '')
+#         if '/' not in cur_base and '\\' not in cur_base and cur_base[0] != '*':
+#             bases.append(cur_base)
 
-    if bases:
-        return min(bases, key=lambda s: (len(s), s))
-    return None
+#     if bases:
+#         return min(bases, key=lambda s: (len(s), s))
+#     return None
 
 
 def main(request: str):
@@ -33,8 +33,13 @@ def main(request: str):
     print(f'Trie knows about {len(trie.words_indexed):,d} words')
 
     words = list(map(str.lower, request.split()))
-    words_with_stem = [(word, get_stem(word) or word) for word in words]
+    words_with_stem = [(word, word or word) for word in words]
     print('Request:', words_with_stem)
+
+    # print(len(trie.data))
+    # print((True, trie.word2index('covid')) in trie.data)
+    # print((False, trie.word2index('covid')) in trie.data)
+    # print(trie.get_data(trie.data[(False, trie.word2index('covid'))][1]))
 
     # if 'covid (False)' in trie.get_data():
     #     print(trie.get_data()['covid (False)'])
@@ -63,8 +68,8 @@ if __name__ == '__main__':
 
     # main('Сүйүктүү мырзаңызга кандай')
     # main('Апам кадрды')
-    # main('үйдө компьютер')
+    main('үйдө компьютер')
     # main('Мен бүгүн дүкөнгө')
-    main('COVID 19')
+    # main('COVID 19')
     # main('жаңылыктар')
     # main('Президент өзүнүн бийлигин уламдан улам бекитип')
