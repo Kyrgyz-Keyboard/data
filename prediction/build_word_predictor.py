@@ -26,8 +26,8 @@ LOG_EVERY_N_BYTES = 10 * 1024 * 1024  # 10 MB
 
 
 # WORD_FREQ_THRESHOLD = 10
-RESULT_FREQ_THRESHOLD = 3
-MAX_RESULTS = 5
+RESULT_FREQ_THRESHOLD = 5
+MAX_RESULTS = 4
 
 
 def size_to_str(size_bytes: int) -> str:
@@ -51,14 +51,7 @@ def build_trie():
             word_freq[word] += int(freq)
             word_size[word] = len(word.encode('utf-8'))
 
-    allowed_words: set[str] = {
-        word
-        for word, freq in word_freq.items()
-        # if freq >= WORD_FREQ_THRESHOLD
-    }
-    del word_freq
-
-    print(f'Allowed words: {len(allowed_words):,d}')
+    print(f'Words: {len(word_freq):,d}')
 
     print('Reading Apertium mapper...')
     apertium_mapper: dict[str, str] = {}
@@ -77,7 +70,7 @@ def build_trie():
     print(f'Source file size: {size_to_str(source_file_size)}')
 
     print('Building trie...')
-    trie = Trie(allowed_words, apertium_mapper)
+    trie = Trie(set(word_freq) | set(apertium_mapper.values()), apertium_mapper)
 
     total_read_size = 0
     next_log = LOG_EVERY_N_BYTES
