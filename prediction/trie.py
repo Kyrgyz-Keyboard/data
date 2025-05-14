@@ -197,8 +197,9 @@ class Trie:
 
     def dump(self, file_obj: BytesIO, min_freq: int = 0, max_results: int = 5):
         print('Preparing trie for dumping...')
-        words_used: set[int] = set()
-        _prepare([0, self.data], words_used, min_freq, max_results)
+        words_used_set: set[int] = set()
+        _prepare([0, self.data], words_used_set, min_freq, max_results)
+        words_used = sorted(words_used_set)
 
         print('Words used: ', len(words_used))
 
