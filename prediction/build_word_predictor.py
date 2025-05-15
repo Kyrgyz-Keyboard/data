@@ -73,7 +73,8 @@ def build_trie():
     print(f'Source file size: {size_to_str(source_file_size)}')
 
     print('Building trie...')
-    all_words = list(word_freq.keys()) + list(apertium_mapper.values())
+    all_words = list(word_freq.keys())
+    all_words.extend(word for word in apertium_mapper.values() if word not in word_freq)
     trie = Trie(all_words, apertium_mapper)
 
     total_read_size = 0
