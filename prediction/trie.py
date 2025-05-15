@@ -42,14 +42,14 @@ STEM_MARKER_WHOLE = STEM_MARKER << 16
 INFINITY = int(1e9)
 
 
-def _prepare(node: TrieNode, words_used: set[int], min_freq: int = 0, max_results: int = INFINITY):
-    # Step 1: Remove nodes with freq < min_freq
+def _prepare(node: TrieNode, words_used: set[int], min_usage: int = 0, max_results: int = INFINITY):
+    # Step 1: Remove nodes with freq < min_usage
 
     to_remove = []
     for key, next_node in node[1].items():
-        _prepare(next_node, words_used, min_freq, max_results)
+        _prepare(next_node, words_used, min_usage, max_results)
         node[0] += next_node[0]
-        if next_node[0] < min_freq:
+        if next_node[0] < min_usage:
             to_remove.append(key)
 
     for key in to_remove:
@@ -195,13 +195,18 @@ class Trie:
 
             cur_data.setdefault((False, self.words_indexed[words[-1]]), [0, {}])[0] += 1
 
-    def dump(self, file_obj: BytesIO, min_freq: int = 0, max_results: int = 5):
+    def dump(self, file_obj: BytesIO, force_add_words: set[str], min_usage: int = 0, max_results: int = 5):
         print('Preparing trie for dumping...')
         words_used_set: set[int] = set()
-        _prepare([0, self.data], words_used_set, min_freq, max_results)
+        _prepare([0, self.data], words_used_set, min_usage, max_results)
+        words_used_set.update(
+            self.words_indexed[word]
+            for word in force_add_words
+            if word in force_add_words
+        )
         words_used = sorted(words_used_set)
 
-        print('Words used: ', len(words_used))
+        print('Words used:', len(words_used))
 
         print('Removing first layer nodes that have empty second layer...')
         to_remove = []
@@ -407,7 +412,7 @@ if __name__ == '__main__':
 
     # print(json.dumps(trie.get_data(), indent=4, ensure_ascii=False))
 
-    trie.dump(file_obj, min_freq=0, max_results=100)
+    trie.dump(file_obj, set(trie.words_indexed), min_usage=0, max_results=100)
 
     file_obj.seek(0)
 

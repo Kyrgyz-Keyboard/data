@@ -25,7 +25,7 @@ FINISH_AT_N_BYTES = 100 * 1024 * 1024  # 100 MB
 LOG_EVERY_N_BYTES = 10 * 1024 * 1024  # 10 MB
 
 
-# WORD_FREQ_THRESHOLD = 10
+WORD_FREQ_THRESHOLD = 10
 RESULT_FREQ_THRESHOLD = 10
 MAX_RESULTS = 4
 
@@ -51,7 +51,10 @@ def build_trie():
             word_freq[word] += int(freq)
             word_size[word] = len(word.encode('utf-8'))
 
+    force_add_words = {word for word, freq in word_freq.items() if freq >= WORD_FREQ_THRESHOLD}
+
     print(f'Words: {len(word_freq):,d}')
+    print(f'Force add: {len(force_add_words):,d}')
 
     print('Reading Apertium mapper...')
     apertium_mapper: dict[str, str] = {}
@@ -70,7 +73,8 @@ def build_trie():
     print(f'Source file size: {size_to_str(source_file_size)}')
 
     print('Building trie...')
-    trie = Trie(set(word_freq) | set(apertium_mapper.values()), apertium_mapper)
+    all_words = list(word_freq.keys()) + list(apertium_mapper.values())
+    trie = Trie(all_words, apertium_mapper)
 
     total_read_size = 0
     next_log = LOG_EVERY_N_BYTES
@@ -97,7 +101,7 @@ def build_trie():
             #     break
 
     print()
-    trie.dump_file(mkpath('../results/trie.bin'), RESULT_FREQ_THRESHOLD, MAX_RESULTS)
+    trie.dump_file(mkpath('../results/trie.bin'), force_add_words, RESULT_FREQ_THRESHOLD, MAX_RESULTS)
 
     trie_size = os.path.getsize(mkpath('../results/trie.bin'))
     print(f'Trie size: {size_to_str(trie_size)}')
