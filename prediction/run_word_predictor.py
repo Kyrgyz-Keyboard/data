@@ -37,6 +37,7 @@ def main(request: str):
     print('Request:', words_with_stem)
 
     # print(len(trie.data))
+    print([word for word in trie.words_indexed.keys() if word.startswith('ме')])
     # print((True, trie.word2index('covid')) in trie.data)
     # print((False, trie.word2index('covid')) in trie.data)
     # print(trie.get_data(trie.data[(False, trie.word2index('covid'))][1]))
