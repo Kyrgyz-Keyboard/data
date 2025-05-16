@@ -85,15 +85,15 @@ def _dump(
     new_index_mapping: dict[int, int],
     layer: int = 1
 ):
-    for (is_stem, word_index), (_, next_node) in sorted(
+    for (_, word_index), (_, next_node) in sorted(
         cur_data.items(),
-        key=lambda x: x[1][0],
+        key=lambda x: (not x[0][0], x[1][0]),
         reverse=True
     ):
         # Set first bit of the first byte of byte_repr to 1 if is_stem else 0:
-        word_index = new_index_mapping[word_index]
-        if is_stem:
-            word_index |= STEM_MARKER_WHOLE
+        # word_index = new_index_mapping[word_index]
+        # if is_stem:
+        #     word_index |= STEM_MARKER_WHOLE
 
         file_obj.write(int.to_bytes(word_index, 3, 'big'))
         # file_obj.write(int.to_bytes(freq, 4, 'big'))
@@ -314,18 +314,6 @@ class Trie:
 
             word, apertium_word = words[start_index]
 
-            if apertium_word in self.words_indexed:
-                if (True, self.words_indexed[apertium_word]) in cur_data:
-                    log(f'Word found on layer (apertium): "{apertium_word}"')
-                    yield from fetch_inner(
-                        cur_data[(True, self.words_indexed[apertium_word])][1],
-                        start_index + 1
-                    )
-                else:
-                    log(f'Word not found on layer (apertium): "{apertium_word}"')
-            else:
-                log(f'Unknown word (apertium): "{apertium_word}"')
-
             if word in self.words_indexed:
                 if (False, self.words_indexed[word]) in cur_data:
                     log(f'Word found on layer (normal): "{word}"')
@@ -337,6 +325,18 @@ class Trie:
                     log(f'Word not found on layer (normal): "{word}"')
             else:
                 log(f'Unknown word: "{word}"')
+
+            if apertium_word in self.words_indexed:
+                if (True, self.words_indexed[apertium_word]) in cur_data:
+                    log(f'Word found on layer (apertium): "{apertium_word}"')
+                    yield from fetch_inner(
+                        cur_data[(True, self.words_indexed[apertium_word])][1],
+                        start_index + 1
+                    )
+                else:
+                    log(f'Word not found on layer (apertium): "{apertium_word}"')
+            else:
+                log(f'Unknown word (apertium): "{apertium_word}"')
 
         raw_results: list[tuple[int, int, bool, int]] = []
         for layers_num in range(min(len(words) + 1, Trie.MAX_LAYERS), 1, -1):
@@ -353,17 +353,9 @@ class Trie:
         for layers_num, freq, is_stem, prediction in raw_results:
             if len(distinct_results) == max_results:
                 return
-            if not is_stem and (False, self.words_indexed_reverse[prediction]) not in distinct_results:
-                distinct_results.add((False, self.words_indexed_reverse[prediction]))
-                yield (layers_num, freq, False, self.words_indexed_reverse[prediction])
-
-        # Then yeild stems
-        for layers_num, freq, is_stem, prediction in raw_results:
-            if len(distinct_results) == max_results:
-                return
-            if is_stem and (True, self.words_indexed_reverse[prediction]) not in distinct_results:
-                distinct_results.add((True, self.words_indexed_reverse[prediction]))
-                yield (layers_num, freq, True, self.words_indexed_reverse[prediction])
+            if (is_stem, self.words_indexed_reverse[prediction]) not in distinct_results:
+                distinct_results.add((is_stem, self.words_indexed_reverse[prediction]))
+                yield (layers_num, freq, is_stem, self.words_indexed_reverse[prediction])
 
     def word2index(self, word: str) -> int:
         return self.words_indexed[word]
