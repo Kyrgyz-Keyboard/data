@@ -93,7 +93,7 @@ def _dump(
         reverse=True
     ):
         # Set first bit of the first byte of byte_repr to 1 if is_stem else 0:
-        # word_index = new_index_mapping[word_index]
+        word_index = new_index_mapping[word_index]
         # if is_stem:
         #     word_index |= STEM_MARKER_WHOLE
 
@@ -262,13 +262,15 @@ class Trie:
                     stack.pop()
                     break
 
-                is_stem = bool(word_index_byte1 & STEM_MARKER)
-                word_index = ((word_index_byte1 & ~STEM_MARKER) << 16) | int.from_bytes(file_obj.read(2), 'big')
+                # is_stem = bool(word_index_byte1 & STEM_MARKER)
+                word_index = (word_index_byte1 << 16) | int.from_bytes(file_obj.read(2), 'big')
+
+                assert 0 <= word_index < len(result.words_indexed_reverse), word_index
 
                 # freq = int.from_bytes(file_obj.read(4), 'big')
                 # next_node: TrieNode = [freq, {}]
                 next_node: TrieNode = [0, {}]
-                cur_data[(is_stem, word_index)] = next_node
+                cur_data[(False, word_index)] = next_node
                 if layer < Trie.MAX_LAYERS:
                     stack.append((next_node[1], layer + 1))
                     break
