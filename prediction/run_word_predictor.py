@@ -58,7 +58,7 @@ def main(request: str):
     #     trie.data[(False, trie.word2index('covid'))][1]
     # ))
 
-    print(trie.get_data(trie.data[(True, trie.word2index('компьютер'))][1]))
+    # print(trie.get_data(trie.data[(True, trie.word2index('компьютер'))][1]))
 
     print(words_with_stem, list(trie.fetch(words_with_stem, log_enabled=True)))
 
