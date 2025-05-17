@@ -28,6 +28,8 @@ _DECODING_TABLE = (
 ENCODING_TABLE = {letter: index.to_bytes(1, 'big') for index, letter in enumerate(_DECODING_TABLE, start=1)}
 DECODING_TABLE = {index.to_bytes(1, 'big'): letter for index, letter in enumerate(_DECODING_TABLE, start=1)}
 
+WORD_INDEX_SHIFT = 1
+
 
 #               freq         is_stem  word_index
 TrieNode = list[int, dict[tuple[bool, int], 'TrieNode']]  # type: ignore[type-arg]
@@ -155,14 +157,14 @@ class Trie:
         apertium_mapper: dict[str, str] | None = None
     ):
         self.apertium_mapper = apertium_mapper or {}
+
         self.words_indexed: dict[str, int] = {
             word: index
-            for index, word in enumerate(all_words)
+            for index, word in enumerate(all_words, start=WORD_INDEX_SHIFT)
         }
-        self.words_indexed_reverse: dict[int, str] = {
-            index: word
-            for word, index in self.words_indexed.items()
-        }
+
+        self.words_indexed_reverse = [''] * WORD_INDEX_SHIFT
+        self.words_indexed_reverse.extend(all_words)
 
         words_count_bits = ceil(log2(len(self.words_indexed)))
         # Reserved bits: 3
